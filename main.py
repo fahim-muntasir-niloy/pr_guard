@@ -18,7 +18,7 @@ async def main():
         print("Agent initialized successfully with tools")
             
         # Optional: Test a simple command if you want to see it in action
-        response = await agent.ainvoke({"input": ""})
+        response = await agent.ainvoke({"input": "create a comment on the latest pull request"})
         print(response)
 
     except Exception as e:

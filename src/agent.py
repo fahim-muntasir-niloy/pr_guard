@@ -2,12 +2,14 @@ from langchain.agents import create_agent
 from src.prompt import system_prompt
 from src.model import llm
 from src.tools import TOOLS
+from src.schema.response import pr_agent_response
 
 async def init_agent():
     agent = create_agent(
         tools=TOOLS,
         model=llm,
         system_prompt=system_prompt,
-        name="PR Guard Agent"
+        name="PR_Guard_Agent",
+        response_format=pr_agent_response
     )
     return agent
