@@ -25,6 +25,6 @@ async def main():
         print(f"Failed to initialize agent: {e}")
 
 if __name__ == "__main__":
-    # import uvicorn
-    asyncio.run(main())
-    # uvicorn.run(app, host="0.0.0.0", port=8000)
+    import uvicorn
+    # asyncio.run(main())
+    uvicorn.run(app, host="0.0.0.0", port=8000)

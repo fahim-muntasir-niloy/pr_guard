@@ -8,5 +8,6 @@ async def init_agent():
         tools=TOOLS,
         model=llm,
         system_prompt=system_prompt,
+        name="PR Guard Agent"
     )
     return agent

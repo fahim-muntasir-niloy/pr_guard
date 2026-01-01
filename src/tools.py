@@ -5,7 +5,7 @@ from langchain.tools import tool
 from src.utils.git_utils import _run_git_command, get_default_branch
 
 @tool
-def list_files_tree(path: str = ".", max_depth: int = 3) -> str:
+async def list_files_tree(path: str = ".", max_depth: int = 3) -> str:
     """
     Returns the directory structure of the specified path in a tree-like format.
     Use this to understand the project structure.
@@ -42,7 +42,7 @@ def list_files_tree(path: str = ".", max_depth: int = 3) -> str:
     return "\n".join(output)
 
 @tool
-def read_file_cat(file_path: str) -> str:
+async def read_file_cat(file_path: str) -> str:
     """
     Reads the content of a specific file.
     Use this to see the implementation details of a file.
@@ -64,7 +64,7 @@ def read_file_cat(file_path: str) -> str:
         return f"Error reading file: {str(e)}"
 
 @tool
-def list_git_branches() -> str:
+async def list_git_branches() -> str:
     """
     Returns the list of git branches.
     Use this to see the available branches.
@@ -73,7 +73,7 @@ def list_git_branches() -> str:
     return _run_git_command(["branch", "-a"])
 
 @tool
-def get_git_diff(base: Optional[str] = None, head: str = "HEAD") -> str:
+async def get_git_diff(base: Optional[str] = None, head: str = "HEAD") -> str:
     """
     Returns the git diff between two branches or commits.
     Use this to see what exact changes were made in a PR.
@@ -83,7 +83,7 @@ def get_git_diff(base: Optional[str] = None, head: str = "HEAD") -> str:
     return _run_git_command(["diff", f"{base}...{head}"])
 
 @tool
-def get_git_log(limit: int = 10) -> str:
+async def get_git_log(limit: int = 10) -> str:
     """
     Returns the recent git commit log.
     Use this to understand the history of changes.
@@ -91,7 +91,7 @@ def get_git_log(limit: int = 10) -> str:
     return _run_git_command(["log", f"-n {limit}", "--oneline", "--graph", "--all"])
 
 @tool
-def search_code_grep(pattern: str, path: str = ".") -> str:
+async def search_code_grep(pattern: str, path: str = ".") -> str:
     """
     Searches for a pattern in the codebase.
     Use this to find references to functions, classes, or specific strings.
@@ -120,20 +120,30 @@ def search_code_grep(pattern: str, path: str = ".") -> str:
     
     return "\n".join(results[:50]) # Limit to 50 results
 
-@tool
-def list_changed_files(base: Optional[str] = None, head: str = "HEAD") -> str:
+# @tool
+async def list_changed_files(base: Optional[str] = None, head: Optional[str] = "HEAD") -> str:
     """
     Lists the files that have changed between two git references (e.g., base...head).
-    If base is not provided, it defaults to master/main.
-    If this returns blank, it may mean you are already on the base branch. 
-    In that case, use get_last_commit_info to see the latest changes.
+    If base is not provided, it defaults to the default branch (main/master).
+    If head is not provided, it defaults to HEAD.
+    If this returns a message about no changes, you might need to check if you've committed your changes.
     """
     if base is None:
         base = get_default_branch()
-    return _run_git_command(["diff", "--name-only", f"{base}...{head}"])
+    
+    # Using triple dot to see changes in head since it diverged from base
+    cmd = ["diff", "--name-only", f"{base}...{head}"]
+    output = _run_git_command(cmd)
+    
+    if not output or not output.strip():
+        # Fallback to double dot if triple dot is empty? No, triple dot is correct for PRs.
+        # But let's provide a more helpful message.
+        return f"No changed files found between {base} and {head}. Make sure your changes are committed to the head branch."
+    
+    return output.strip()
 
 @tool
-def get_last_commit_info() -> str:
+async def get_last_commit_info() -> str:
     """
     Returns the changed files and the diff of the latest commit (HEAD~1...HEAD).
     Use this if list_changed_files is empty or you want to review the very last change on the current branch.
