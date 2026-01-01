@@ -21,7 +21,7 @@ async def file_tree(path: str = "."):
     return await list_files_tree(path=path)
 
 @app.get("/changed_files/{base}/{head}")
-async def changed_files(base: str = "HEAD", head: str = "HEAD"):
+async def changed_files(base: str = "master", head: str = "dev"):
     return await list_changed_files_between_branches(base=base, head=head)
 
 # @app.post("/review")

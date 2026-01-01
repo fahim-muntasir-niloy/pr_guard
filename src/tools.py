@@ -120,7 +120,7 @@ async def search_code_grep(pattern: str, path: str = ".") -> str:
     
     return "\n".join(results[:50]) # Limit to 50 results
 
-# @tool
+@tool
 async def list_changed_files_between_branches(base: Optional[str] = None, head: Optional[str] = "HEAD") -> str:
     """
     Lists the files that have changed between two git references (e.g., base...head).

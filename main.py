@@ -18,13 +18,13 @@ async def main():
         print("Agent initialized successfully with tools")
             
         # Optional: Test a simple command if you want to see it in action
-        response = await agent.ainvoke({"input": "Give a short review on this last git push"})
+        response = await agent.ainvoke({"input": ""})
         print(response)
 
     except Exception as e:
         print(f"Failed to initialize agent: {e}")
 
 if __name__ == "__main__":
-    import uvicorn
-    # asyncio.run(main())
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # import uvicorn
+    asyncio.run(main())
+    # uvicorn.run(app, host="0.0.0.0", port=8000)
