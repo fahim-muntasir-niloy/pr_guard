@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from src.tools import list_files_tree
 
 app = FastAPI(
     title="PR Guard",
@@ -15,6 +16,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.post("/review")
-async def review_pr():
+@app.get("/file_tree/{path}")
+async def list_files_tree(path: str = "."):
+    return list_files_tree.invoke({"path": path})
+
+# @app.post("/review")
+# async def review_pr():
     
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
