@@ -123,12 +123,24 @@ def search_code_grep(pattern: str, path: str = ".") -> str:
 @tool
 def list_changed_files(base: Optional[str] = None, head: str = "HEAD") -> str:
     """
-    Lists the files that have changed between two git references.
-    Use this to see which files are part of a PR.
+    Lists the files that have changed between two git references (e.g., base...head).
+    If base is not provided, it defaults to master/main.
+    If this returns blank, it may mean you are already on the base branch. 
+    In that case, use get_last_commit_info to see the latest changes.
     """
     if base is None:
         base = get_default_branch()
     return _run_git_command(["diff", "--name-only", f"{base}...{head}"])
+
+@tool
+def get_last_commit_info() -> str:
+    """
+    Returns the changed files and the diff of the latest commit (HEAD~1...HEAD).
+    Use this if list_changed_files is empty or you want to review the very last change on the current branch.
+    """
+    files = _run_git_command(["diff", "--name-only", "HEAD~1", "HEAD"])
+    diff = _run_git_command(["diff", "HEAD~1", "HEAD"])
+    return f"Changed Files in latest commit:\n{files}\n\nDiff of latest commit:\n{diff}"
 
 
 TOOLS = [
@@ -139,4 +151,5 @@ TOOLS = [
     get_git_log,
     search_code_grep,
     list_changed_files,
+    get_last_commit_info,
 ]
