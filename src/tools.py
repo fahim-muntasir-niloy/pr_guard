@@ -64,7 +64,16 @@ def read_file_cat(file_path: str) -> str:
         return f"Error reading file: {str(e)}"
 
 @tool
-def get_git_diff(base: str = None, head: str = "HEAD") -> str:
+def list_git_branches() -> str:
+    """
+    Returns the list of git branches.
+    Use this to see the available branches.
+    and get the default branch name
+    """
+    return _run_git_command(["branch", "-a"])
+
+@tool
+def get_git_diff(base: Optional[str] = None, head: str = "HEAD") -> str:
     """
     Returns the git diff between two branches or commits.
     Use this to see what exact changes were made in a PR.
@@ -112,7 +121,7 @@ def search_code_grep(pattern: str, path: str = ".") -> str:
     return "\n".join(results[:50]) # Limit to 50 results
 
 @tool
-def list_changed_files(base: str = None, head: str = "HEAD") -> str:
+def list_changed_files(base: Optional[str] = None, head: str = "HEAD") -> str:
     """
     Lists the files that have changed between two git references.
     Use this to see which files are part of a PR.
@@ -125,6 +134,7 @@ def list_changed_files(base: str = None, head: str = "HEAD") -> str:
 TOOLS = [
     list_files_tree,
     read_file_cat,
+    list_git_branches,
     get_git_diff,
     get_git_log,
     search_code_grep,
