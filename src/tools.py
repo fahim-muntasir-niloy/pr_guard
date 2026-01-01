@@ -2,7 +2,7 @@ import os
 import subprocess
 from typing import List, Optional
 from langchain.tools import tool
-from src.utils.git_utils import _run_git_command
+from src.utils.git_utils import _run_git_command, get_default_branch
 
 @tool
 def list_files_tree(path: str = ".", max_depth: int = 3) -> str:
@@ -64,11 +64,13 @@ def read_file_cat(file_path: str) -> str:
         return f"Error reading file: {str(e)}"
 
 @tool
-def get_git_diff(base: str = "main", head: str = "HEAD") -> str:
+def get_git_diff(base: str = None, head: str = "HEAD") -> str:
     """
     Returns the git diff between two branches or commits.
     Use this to see what exact changes were made in a PR.
     """
+    if base is None:
+        base = get_default_branch()
     return _run_git_command(["diff", f"{base}...{head}"])
 
 @tool
@@ -110,11 +112,13 @@ def search_code_grep(pattern: str, path: str = ".") -> str:
     return "\n".join(results[:50]) # Limit to 50 results
 
 @tool
-def list_changed_files(base: str = "main", head: str = "HEAD") -> str:
+def list_changed_files(base: str = None, head: str = "HEAD") -> str:
     """
     Lists the files that have changed between two git references.
     Use this to see which files are part of a PR.
     """
+    if base is None:
+        base = get_default_branch()
     return _run_git_command(["diff", "--name-only", f"{base}...{head}"])
 
 

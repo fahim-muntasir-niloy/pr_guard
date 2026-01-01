@@ -16,3 +16,12 @@ def _run_git_command(command: List[str], cwd: str = ".") -> str:
         return result.stdout
     except Exception as e:
         return f"Error: {str(e)}"
+
+def get_default_branch(cwd: str = ".") -> str:
+    """Detects the default branch (master or main)."""
+    # Try to find which one exists locally
+    for branch in ["main", "master"]:
+        out = _run_git_command(["rev-parse", "--verify", branch], cwd=cwd)
+        if "Error" not in out:
+            return branch
+    return "master" # Fallback

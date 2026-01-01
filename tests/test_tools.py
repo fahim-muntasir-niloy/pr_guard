@@ -1,9 +1,9 @@
 import sys
 import os
-# Add src to path
-sys.path.append(os.path.join(os.getcwd(), "src"))
+# Add project root to path
+sys.path.append(os.getcwd())
 
-from tools import list_files_tree, read_file_cat, get_git_diff, get_git_log, search_code_grep, list_changed_files
+from src.tools import list_files_tree, read_file_cat, get_git_diff, get_git_log, search_code_grep, list_changed_files
 
 def test_tools():
     print("Testing list_files_tree...")
@@ -23,8 +23,8 @@ def test_tools():
     print("-" * 20)
 
     # Note: get_git_diff and list_changed_files might return empty or error if not in a proper git context with a main branch
-    print("Testing list_changed_files...")
-    print(list_changed_files.invoke({"base": "master", "head": "HEAD"}))
+    print("Testing list_changed_files (default branch)...")
+    print(list_changed_files.invoke({}))
     print("-" * 20)
 
 if __name__ == "__main__":
