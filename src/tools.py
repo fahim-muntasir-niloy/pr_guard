@@ -121,26 +121,16 @@ async def search_code_grep(pattern: str, path: str = ".") -> str:
     return "\n".join(results[:50]) # Limit to 50 results
 
 # @tool
-async def list_changed_files(base: Optional[str] = None, head: Optional[str] = "HEAD") -> str:
+async def list_changed_files_between_branches(base: Optional[str] = None, head: Optional[str] = "HEAD") -> str:
     """
     Lists the files that have changed between two git references (e.g., base...head).
-    If base is not provided, it defaults to the default branch (main/master).
-    If head is not provided, it defaults to HEAD.
-    If this returns a message about no changes, you might need to check if you've committed your changes.
+    If base is not provided, it defaults to master/main.
+    If this returns blank, it may mean you are already on the base branch. 
+    In that case, use get_last_commit_info to see the latest changes.
     """
     if base is None:
         base = get_default_branch()
-    
-    # Using triple dot to see changes in head since it diverged from base
-    cmd = ["diff", "--name-only", f"{base}...{head}"]
-    output = _run_git_command(cmd)
-    
-    if not output or not output.strip():
-        # Fallback to double dot if triple dot is empty? No, triple dot is correct for PRs.
-        # But let's provide a more helpful message.
-        return f"No changed files found between {base} and {head}. Make sure your changes are committed to the head branch."
-    
-    return output.strip()
+    return _run_git_command(["diff", "--name-only", f"{base}...{head}"])
 
 @tool
 async def get_last_commit_info() -> str:
@@ -160,6 +150,6 @@ TOOLS = [
     get_git_diff,
     get_git_log,
     search_code_grep,
-    list_changed_files,
+    list_changed_files_between_branches,
     get_last_commit_info,
 ]
