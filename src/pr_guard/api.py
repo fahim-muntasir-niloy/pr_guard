@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.tools import list_files_tree, list_changed_files_between_branches
+from pr_guard.tools import list_files_tree, list_changed_files_between_branches
 
 app = FastAPI(
     title="PR Guard",

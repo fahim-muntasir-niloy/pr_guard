@@ -2,10 +2,10 @@ from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
 from langchain.agents.middleware import ToolCallLimitMiddleware
 
-from src.prompt import system_prompt
-from src.model import llm
-from src.tools import TOOLS
-from src.schema.response import pr_agent_response
+from pr_guard.prompt import system_prompt
+from pr_guard.model import llm
+from pr_guard.tools import TOOLS
+from pr_guard.schema.response import pr_agent_response
 
 
 async def init_agent():
