@@ -20,9 +20,7 @@ async def main():
         result = await agent.ainvoke({"messages": 
         [
             {"role": "user",
-             "content": """Comment on the latest PR change.
-             Find any security vulnerabilities and suggest fixes.
-             """}    
+             "content": """Comment on the latest git commit."""}    
         ]})
         print(result["structured_response"])
 

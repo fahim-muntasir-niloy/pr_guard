@@ -5,6 +5,7 @@ from langchain.tools import tool
 from pydantic import BaseModel, Field, ConfigDict
 from src.utils.git_utils import _run_git_command, get_default_branch
 from src.schema.tool_schema import (ListFilesInput,
+NoInput,
                                     ReadFileInput, 
                                     GitDiffInput,
                                     GitLogInput,
