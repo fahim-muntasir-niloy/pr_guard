@@ -4,13 +4,15 @@ from typing import List, Optional, Type
 from langchain.tools import tool
 from pydantic import BaseModel, Field, ConfigDict
 from src.utils.git_utils import _run_git_command, get_default_branch
-from src.schema.tool_schema import (ListFilesInput,
-NoInput,
-                                    ReadFileInput, 
-                                    GitDiffInput,
-                                    GitLogInput,
-                                    SearchCodeInput,
-                                    ListChangedFilesInput)
+from src.schema.tool_schema import (
+    ListFilesInput,
+    NoInput,
+    ReadFileInput,
+    GitDiffInput,
+    GitLogInput,
+    SearchCodeInput,
+    ListChangedFilesInput,
+)
 
 
 @tool(args_schema=ListFilesInput)
@@ -25,7 +27,7 @@ async def list_files_tree(path: str = ".", max_depth: int = 3) -> str:
     def _build_tree(current_path: str, prefix: str = "", depth: int = 0):
         if depth > max_depth:
             return
-        
+
         try:
             items = sorted(os.listdir(current_path))
         except Exception as e:
@@ -35,13 +37,13 @@ async def list_files_tree(path: str = ".", max_depth: int = 3) -> str:
         for i, item in enumerate(items):
             if item in ignored:
                 continue
-            
+
             full_path = os.path.join(current_path, item)
-            is_last = (i == len(items) - 1)
+            is_last = i == len(items) - 1
             connector = "└── " if is_last else "├── "
-            
+
             output.append(f"{prefix}{connector}{item}")
-            
+
             if os.path.isdir(full_path):
                 extension = "    " if is_last else "│   "
                 _build_tree(full_path, prefix + extension, depth + 1)
@@ -49,6 +51,7 @@ async def list_files_tree(path: str = ".", max_depth: int = 3) -> str:
     output.append(path)
     _build_tree(path)
     return "\n".join(output)
+
 
 @tool(args_schema=ReadFileInput)
 async def read_file_cat(file_path: str) -> str:
@@ -58,18 +61,19 @@ async def read_file_cat(file_path: str) -> str:
     """
     if not os.path.exists(file_path):
         return f"Error: File '{file_path}' not found."
-    
+
     if os.path.isdir(file_path):
         return f"Error: '{file_path}' is a directory. Use list_files_tree instead."
 
     try:
         if os.path.getsize(file_path) > 1_000_000:
             return f"Error: File '{file_path}' is too large to read (> 1MB)."
-        
+
         with open(file_path, "r", encoding="utf-8") as f:
             return f.read()
     except Exception as e:
         return f"Error reading file: {str(e)}"
+
 
 @tool(args_schema=NoInput)
 async def list_git_branches() -> str:
@@ -78,6 +82,7 @@ async def list_git_branches() -> str:
     Use this to see the available branches and get the default branch name.
     """
     return _run_git_command(["branch", "-a"])
+
 
 @tool(args_schema=GitDiffInput)
 async def get_git_diff(base: Optional[str] = None, head: str = "HEAD") -> str:
@@ -89,6 +94,7 @@ async def get_git_diff(base: Optional[str] = None, head: str = "HEAD") -> str:
         base = get_default_branch()
     return _run_git_command(["diff", f"{base}...{head}"])
 
+
 @tool(args_schema=GitLogInput)
 async def get_git_log(limit: int = 10) -> str:
     """
@@ -96,6 +102,7 @@ async def get_git_log(limit: int = 10) -> str:
     Use this to understand the history of changes.
     """
     return _run_git_command(["log", f"-n {limit}", "--oneline", "--graph", "--all"])
+
 
 @tool(args_schema=SearchCodeInput)
 async def search_code_grep(pattern: str, path: str = ".") -> str:
@@ -105,7 +112,7 @@ async def search_code_grep(pattern: str, path: str = ".") -> str:
     """
     results = []
     ignored_dirs = {".git", "__pycache__", "node_modules", ".venv", "venv"}
-    
+
     try:
         for root, dirs, files in os.walk(path):
             dirs[:] = [d for d in dirs if d not in ignored_dirs]
@@ -115,19 +122,24 @@ async def search_code_grep(pattern: str, path: str = ".") -> str:
                     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                         for line_num, line in enumerate(f, 1):
                             if pattern in line:
-                                results.append(f"{file_path}:{line_num}: {line.strip()}")
+                                results.append(
+                                    f"{file_path}:{line_num}: {line.strip()}"
+                                )
                 except Exception:
                     continue
     except Exception as e:
         return f"Error searching: {str(e)}"
-    
+
     if not results:
         return f"No matches found for '{pattern}'."
-    
+
     return "\n".join(results[:50])
 
+
 @tool(args_schema=ListChangedFilesInput)
-async def list_changed_files_between_branches(base: Optional[str] = None, head: Optional[str] = "HEAD") -> str:
+async def list_changed_files_between_branches(
+    base: Optional[str] = None, head: Optional[str] = "HEAD"
+) -> str:
     """
     Lists the files that have changed between two git references (e.g., base...head).
     If base is not provided, it defaults to master/main.
@@ -135,6 +147,7 @@ async def list_changed_files_between_branches(base: Optional[str] = None, head: 
     if base is None:
         base = get_default_branch()
     return _run_git_command(["diff", "--name-only", f"{base}...{head}"])
+
 
 @tool(args_schema=NoInput)
 async def get_last_commit_info() -> str:
@@ -145,6 +158,7 @@ async def get_last_commit_info() -> str:
     files = _run_git_command(["diff", "--name-only", "HEAD~1", "HEAD"])
     diff = _run_git_command(["diff", "HEAD~1", "HEAD"])
     return f"Changed Files in latest commit:\n{files}\n\nDiff of latest commit:\n{diff}"
+
 
 TOOLS = [
     list_files_tree,

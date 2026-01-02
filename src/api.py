@@ -16,17 +16,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/file_tree/{path}")
 async def file_tree(path: str = "."):
     return await list_files_tree(path=path)
+
 
 @app.get("/changed_files/{base}/{head}")
 async def changed_files(base: str = "master", head: str = "dev"):
     return await list_changed_files_between_branches(base=base, head=head)
 
+
 # @app.post("/review")
 # async def review_pr():
-    
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

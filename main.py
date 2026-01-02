@@ -16,16 +16,32 @@ async def main():
     try:
         agent = await init_agent()
         print("Agent initialized successfully with tools")
-            
-        result = await agent.ainvoke({"messages": 
-        [
-            {"role": "user",
-             "content": """Comment on the latest git commit."""}    
-        ]})
+
+        result = await agent.ainvoke(
+            {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": """Execute a pre-merge code review for the latest git commit.
+
+                                        You must:
+                                        - Use git tools to identify changed files
+                                        - Review only modified lines and their immediate context
+                                        - Produce GitHub-style diff comments
+                                        - Assign severity to each issue
+                                        - Output only valid `pr_agent_response` JSON
+
+                                        Do not explain your process.
+                                        """,
+                    }
+                ]
+            }
+        )
         print(result["structured_response"])
 
     except Exception as e:
         print(f"Failed to initialize agent: {e}")
+
 
 if __name__ == "__main__":
     # import uvicorn
