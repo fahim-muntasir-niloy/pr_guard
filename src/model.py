@@ -5,6 +5,6 @@ from rich import print
 
 os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
 
-llm = init_chat_model(model="gpt-5")
+llm = init_chat_model(model="gpt-5-nano-2025-08-07")
 
 # print(llm.invoke("Hello, how are you?"))

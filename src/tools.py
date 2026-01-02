@@ -1,10 +1,67 @@
 import os
 import subprocess
-from typing import List, Optional
+from typing import List, Optional, Type
 from langchain.tools import tool
+from pydantic import BaseModel, Field, ConfigDict
 from src.utils.git_utils import _run_git_command, get_default_branch
 
-@tool
+# --- Input Schemas ---
+
+class NoInput(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={"additionalProperties": False}
+    )
+
+class ListFilesInput(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={"additionalProperties": False}
+    )
+    path: str = Field(description="Directory path to list (default: current dir)")
+    max_depth: int = Field(description="Maximum recursion depth")
+
+class ReadFileInput(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={"additionalProperties": False}
+    )
+    file_path: str = Field(description="The path of the file to read")
+
+class GitDiffInput(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={"additionalProperties": False}
+    )
+    base: Optional[str] = Field(description="Base branch/commit. Defaults to main/master.")
+    head: str = Field(description="Head branch/commit. Defaults to HEAD.")
+
+class GitLogInput(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={"additionalProperties": False}
+    )
+    limit: int = Field(description="Number of commits to show")
+
+class SearchCodeInput(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={"additionalProperties": False}
+    )
+    pattern: str = Field(description="The string or pattern to search for")
+    path: str = Field(description="Directory to search in")
+
+class ListChangedFilesInput(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={"additionalProperties": False}
+    )
+    base: Optional[str] = Field(description="Base branch/commit. Defaults to main/master.")
+    head: str = Field(description="Head branch/commit. Defaults to HEAD.")
+
+# --- Tools ---
+
+@tool(args_schema=ListFilesInput)
 async def list_files_tree(path: str = ".", max_depth: int = 3) -> str:
     """
     Returns the directory structure of the specified path in a tree-like format.
@@ -41,7 +98,7 @@ async def list_files_tree(path: str = ".", max_depth: int = 3) -> str:
     _build_tree(path)
     return "\n".join(output)
 
-@tool
+@tool(args_schema=ReadFileInput)
 async def read_file_cat(file_path: str) -> str:
     """
     Reads the content of a specific file.
@@ -53,7 +110,6 @@ async def read_file_cat(file_path: str) -> str:
     if os.path.isdir(file_path):
         return f"Error: '{file_path}' is a directory. Use list_files_tree instead."
 
-    # Safety check: Avoid reading very large files (e.g., > 1MB)
     try:
         if os.path.getsize(file_path) > 1_000_000:
             return f"Error: File '{file_path}' is too large to read (> 1MB)."
@@ -63,26 +119,25 @@ async def read_file_cat(file_path: str) -> str:
     except Exception as e:
         return f"Error reading file: {str(e)}"
 
-@tool
+@tool(args_schema=NoInput)
 async def list_git_branches() -> str:
     """
     Returns the list of git branches.
-    Use this to see the available branches.
-    and get the default branch name
+    Use this to see the available branches and get the default branch name.
     """
     return _run_git_command(["branch", "-a"])
 
-@tool
+@tool(args_schema=GitDiffInput)
 async def get_git_diff(base: Optional[str] = None, head: str = "HEAD") -> str:
     """
-    Returns the git diff between two branches or commits.
+    Returns the git diff between two branches or commits (base...head).
     Use this to see what exact changes were made in a PR.
     """
     if base is None:
         base = get_default_branch()
     return _run_git_command(["diff", f"{base}...{head}"])
 
-@tool
+@tool(args_schema=GitLogInput)
 async def get_git_log(limit: int = 10) -> str:
     """
     Returns the recent git commit log.
@@ -90,13 +145,12 @@ async def get_git_log(limit: int = 10) -> str:
     """
     return _run_git_command(["log", f"-n {limit}", "--oneline", "--graph", "--all"])
 
-@tool
+@tool(args_schema=SearchCodeInput)
 async def search_code_grep(pattern: str, path: str = ".") -> str:
     """
     Searches for a pattern in the codebase.
     Use this to find references to functions, classes, or specific strings.
     """
-    # Using python's os.walk instead of grep for cross-platform compatibility
     results = []
     ignored_dirs = {".git", "__pycache__", "node_modules", ".venv", "venv"}
     
@@ -111,37 +165,34 @@ async def search_code_grep(pattern: str, path: str = ".") -> str:
                             if pattern in line:
                                 results.append(f"{file_path}:{line_num}: {line.strip()}")
                 except Exception:
-                    continue # Skip files that can't be read
+                    continue
     except Exception as e:
         return f"Error searching: {str(e)}"
     
     if not results:
         return f"No matches found for '{pattern}'."
     
-    return "\n".join(results[:50]) # Limit to 50 results
+    return "\n".join(results[:50])
 
-@tool
+@tool(args_schema=ListChangedFilesInput)
 async def list_changed_files_between_branches(base: Optional[str] = None, head: Optional[str] = "HEAD") -> str:
     """
     Lists the files that have changed between two git references (e.g., base...head).
     If base is not provided, it defaults to master/main.
-    If this returns blank, it may mean you are already on the base branch. 
-    In that case, use get_last_commit_info to see the latest changes.
     """
     if base is None:
         base = get_default_branch()
     return _run_git_command(["diff", "--name-only", f"{base}...{head}"])
 
-@tool
+@tool(args_schema=NoInput)
 async def get_last_commit_info() -> str:
     """
     Returns the changed files and the diff of the latest commit (HEAD~1...HEAD).
-    Use this if list_changed_files is empty or you want to review the very last change on the current branch.
+    Use this to review the very last change on the current branch.
     """
     files = _run_git_command(["diff", "--name-only", "HEAD~1", "HEAD"])
     diff = _run_git_command(["diff", "HEAD~1", "HEAD"])
     return f"Changed Files in latest commit:\n{files}\n\nDiff of latest commit:\n{diff}"
-
 
 TOOLS = [
     list_files_tree,

@@ -1,4 +1,5 @@
 from langchain.agents import create_agent
+from langchain.agents.structured_output import ToolStrategy
 from src.prompt import system_prompt
 from src.model import llm
 from src.tools import TOOLS
@@ -10,6 +11,6 @@ async def init_agent():
         model=llm,
         system_prompt=system_prompt,
         name="PR_Guard_Agent",
-        response_format=pr_agent_response
+        response_format=ToolStrategy(pr_agent_response)
     )
     return agent

@@ -1,7 +1,7 @@
+import os
 import asyncio
 from src.agent import init_agent
 from rich import print
-import os
 from src.config import settings
 from src.api import app
 
@@ -17,9 +17,14 @@ async def main():
         agent = await init_agent()
         print("Agent initialized successfully with tools")
             
-        # Optional: Test a simple command if you want to see it in action
-        response = await agent.ainvoke({"input": "create a comment on the latest pull request"})
-        print(response)
+        result = await agent.ainvoke({"messages": 
+        [
+            {"role": "user",
+             "content": """Comment on the latest PR change.
+             Find any security vulnerabilities and suggest fixes.
+             """}    
+        ]})
+        print(result["structured_response"])
 
     except Exception as e:
         print(f"Failed to initialize agent: {e}")
