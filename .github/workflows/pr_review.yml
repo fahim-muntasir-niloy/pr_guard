@@ -32,7 +32,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
         run: |
-          uv run main.py review --plain > review_output.md
+          uv run main.py comment > review_output.md
           # Add the header at the top
           echo -e "### 🤖 PR Guard Bot Review\n\n$(cat review_output.md)" > final_review.md
 

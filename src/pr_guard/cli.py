@@ -44,15 +44,23 @@ async def run_review(plain: bool = False):
                     "messages": [
                         {
                             "role": "user",
-                            "content": """Execute a pre-merge code review for the latest git commit.
+                            "content": """Execute a pre-merge code review for the latest git commits (up to the last merge).
 
                                             You must:
                                             - Use git tools to identify changed files
-                                            - Review only modified lines and their immediate context
+                                            - Review modified lines and their immediate context
                                             - Produce GitHub-style diff comments
                                             - Assign severity to each issue
+                                            - Never repeat all the changes in the diff; only suggest necessary improvements.
+                                            
+                                            **Output Requirements:**
+                                            - Use `### 📄 File: filename` for each file.
+                                            - Use `> [!IMPORTANT]` or `> [!NOTE]` for comments depending on severity.
+                                            - ALWAYS wrap diffs in ```diff ... ``` blocks.
+                                            - Use bold text for labels like **Severity**, **Issue**, etc.
+                                            - Do not include explanatory conversational filler.
 
-                                            Output the review in plain Markdown. Do not explain your process.""",
+                                            Output the review in structured, clean Markdown.""",
                         }
                     ]
                 },
@@ -128,6 +136,45 @@ def review(
     Review the current git changes.
     """
     asyncio.run(run_review(plain=plain))
+
+
+async def run_comment():
+    agent = await init_agent()
+    res = await agent.ainvoke(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "Execute a pre-merge code review for the latest git commits (up to the last merge).\n\n"
+                        "You must:\n"
+                        "- Use git tools to identify changed files\n"
+                        "- Review modified lines and their immediate context\n"
+                        "- Produce GitHub-style diff comments\n"
+                        "- Assign severity to each issue\n"
+                        "- Never repeat all the changes in the diff; only suggest necessary improvements.\n\n"
+                        "**Output Requirements:**\n"
+                        "- Use `### 📄 File: filename` for each file.\n"
+                        "- Use `> [!IMPORTANT]` or `> [!NOTE]` for comments depending on severity.\n"
+                        "- ALWAYS wrap diffs in ```diff ... ``` blocks.\n"
+                        "- Use bold text for labels like **Severity**, **Issue**, etc.\n"
+                        "- Do not include explanatory conversational filler.\n\n"
+                        "Output the review in structured, clean Markdown."
+                    ),
+                }
+            ]
+        }
+    )
+    return res
+
+
+@app.command()
+def comment():
+    """
+    Comment on the current git changes in github.
+    """
+    res = asyncio.run(run_comment())
+    console.print(res["messages"][-1].content)
 
 
 @app.command()
