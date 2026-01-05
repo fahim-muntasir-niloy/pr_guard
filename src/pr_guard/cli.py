@@ -44,7 +44,7 @@ async def run_review(plain: bool = False):
                     "messages": [
                         {
                             "role": "user",
-                            "content": """Execute a pre-merge code review for the latest git commit.
+                            "content": """Execute a pre-merge code review for the latest git commits (upto the last merge).
 
                                             You must:
                                             - Use git tools to identify changed files
