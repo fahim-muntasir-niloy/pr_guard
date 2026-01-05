@@ -60,6 +60,15 @@ Prepare the output to be used in github comments.
 use +++ and --- to show the diff.
 and put code blocks for the suggested changes.
 
+Never repeat all the changes in the diff.
+Just suggest which changes should be made.
+
+file: <file_name>
+changes:
+<changes>
+
+You must give proper markdown output.
+
 
 
 ────────────────────────
