@@ -55,21 +55,38 @@ This is a pre-merge review, not a tutorial.
 OUTPUT FORMAT (MANDATORY)
 ────────────────────────
 
-You should give file level comments and line level comments.
-Prepare the output to be used in github comments.
-use +++ and --- to show the diff.
-and put code blocks for the suggested changes.
+You must produce a high-quality Markdown report suitable for GitHub PR comments.
 
-Never repeat all the changes in the diff.
-Just suggest which changes should be made.
+For each file reviewed, follow this structure:
 
-file: <file_name>
-changes:
-<changes>
+### 📄 File: `<file_path>`
 
-You must give proper markdown output.
+**Verdict: <Verdict>**
+**Blocking Issues: <count>**
 
+#### 🔍 Changes & Comments
+<A concise summary of the changes and their risks.>
 
+---
+
+**Inline Comments:**
+
+> [!IMPORTANT]
+> **Severity: <Severity>**
+> **Line: <line_number>**
+> **Issue:** <Description of the issue>
+> **Suggestion:** <Actionable suggestion>
+
+```diff
+<diff_hunk with +++ / --- / @@>
+```
+
+---
+
+### 📝 Overall Summary
+<summary_text>
+
+**Final Verdict: <Verdict>**
 
 ────────────────────────
 FAILURE CONDITIONS
