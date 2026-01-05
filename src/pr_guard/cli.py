@@ -21,13 +21,22 @@ def setup_env():
     os.environ["LANGSMITH_PROJECT"] = "pr-agent"
 
 
-async def run_review():
-    console.print(Panel("[bold blue]PR Guard[/bold blue] - Initialized", expand=False))
+async def run_review(plain: bool = False):
+    if not plain:
+        console.print(
+            Panel("[bold blue]PR Guard[/bold blue] - Initialized", expand=False)
+        )
     try:
         setup_env()
-        with console.status(
-            "[bold green]Agent is working...", spinner="dots"
-        ) as status:
+
+        # Use a context manager for status if not in plain mode
+        status_manager = (
+            console.status("[bold green]Agent is working...", spinner="dots")
+            if not plain
+            else asyncio.Event()  # Dummy object for plain mode
+        )
+
+        async def _run():
             agent = await init_agent()
 
             async for mode, data in agent.astream(
@@ -42,59 +51,83 @@ async def run_review():
                                             - Review only modified lines and their immediate context
                                             - Produce GitHub-style diff comments
                                             - Assign severity to each issue
-                                            - Output only valid `pr_agent_response` JSON
 
-                                            Do not explain your process.
-                                            """,
+                                            Output the review in plain Markdown. Do not explain your process.""",
                         }
                     ]
                 },
                 stream_mode=["messages", "updates"],
             ):
-                # 1. Capture incremental "steps" (Tool names and inputs)
+                # 1. Capture and print plain text tokens in real-time
                 if mode == "messages":
-                    status.stop()  # Stop spinner while printing tool info
                     message_chunk, metadata = data
+
+                    # Print the text content of the chunk
+                    if message_chunk.content:
+                        if not plain:
+                            status.stop()
+                            console.print(message_chunk.content, end="")
+                            status.start()
+                        else:
+                            console.print(message_chunk.content, end="")
+
+                    # Capture incremental tool names
                     if (
-                        hasattr(message_chunk, "tool_call_chunks")
+                        not plain
+                        and hasattr(message_chunk, "tool_call_chunks")
                         and message_chunk.tool_call_chunks
                     ):
                         for chunk in message_chunk.tool_call_chunks:
                             if chunk.get("name"):
+                                status.stop()
                                 console.print(
-                                    f"\n[bold blue]Calling Tool:[/bold blue] {chunk['name']}"
+                                    f"\n[bold blue]Calling Tool:[/bold blue] {chunk['name']}\n"
                                 )
-                            # if chunk.get("args"):
-                            #     console.print(f"[dim]{chunk['args']}[/dim]", end="")
-                    status.start()  # Resume spinner
+                                status.start()
 
-                # 2. Capture the final "structured_response"
+                # 2. Handle final state updates
                 if mode == "updates":
                     for node_name, update in data.items():
-                        if "structured_response" in update:
-                            status.stop()  # Stop spinner for final output
-                            console.print(
-                                "\n\n[bold green]Final Structured Review:[/bold green]"
-                            )
-                            console.print("-" * 80)
-                            console.print("\n")
-                            console.print(update["structured_response"])
-                            console.print("\n")
-                            console.print("-" * 80)
-                            console.print("\n")
-                            status.start()
+                        # If your graph adds the final result to the 'messages' key
+                        if "messages" in update:
+                            last_msg = update["messages"][-1]
+                            # Only act if this is the final AI response (not a tool call)
+                            if last_msg.type == "ai" and not last_msg.tool_calls:
+                                if not plain:
+                                    status.stop()
+                                    console.print(
+                                        "\n\n[bold green]Review Summary:[/bold green]"
+                                    )
+                                    console.print("-" * 80)
+                                    # Optional: Print final collected content if streaming missed chunks
+                                    # console.print(last_msg.content)
+                                    console.print("-" * 80)
+                                    status.start()
+
+        if not plain:
+            with status_manager as status:
+                await _run()
+        else:
+            await _run()
 
     except Exception as e:
-        console.print(f"\n[red]Error:[/red] {e}")
+        if not plain:
+            console.print(f"\n[red]Error:[/red] {e}")
+        else:
+            print(f"Error: {e}")
         raise typer.Exit(code=1)
 
 
 @app.command()
-def review():
+def review(
+    plain: bool = typer.Option(
+        False, "--plain", help="Output plain Markdown without styling."
+    ),
+):
     """
     Review the current git changes.
     """
-    asyncio.run(run_review())
+    asyncio.run(run_review(plain=plain))
 
 
 @app.command()
