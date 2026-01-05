@@ -139,6 +139,7 @@ def review(
 
 
 async def run_comment():
+    setup_env()
     agent = await init_agent()
     res = await agent.ainvoke(
         {
