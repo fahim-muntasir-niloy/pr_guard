@@ -48,11 +48,18 @@ async def run_review(plain: bool = False):
 
                                             You must:
                                             - Use git tools to identify changed files
-                                            - Review only modified lines and their immediate context
+                                            - Review modified lines and their immediate context
                                             - Produce GitHub-style diff comments
                                             - Assign severity to each issue
+                                            - Never repeat all the changes in the diff.
+                                            - Just suggest which changes should be made.
+                                            - Your output must be in the following format, and precise to the point:
+                                            file: <file_name>
+                                            changes:
+                                            <changes>
 
-                                            Output the review in plain Markdown. Do not explain your process.""",
+                                            Output the review in plain Markdown.
+                                            Do not explain your process.""",
                         }
                     ]
                 },
