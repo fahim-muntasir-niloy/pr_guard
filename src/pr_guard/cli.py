@@ -62,25 +62,23 @@ async def run_review(plain: bool = False):
                 if comment.get("suggestion"):
                     # Wrap suggestion in ```suggestion ... ``` as GitHub expects
                     body += f"\n\n```suggestion\n{comment['suggestion']}\n```"
-
-                formatted_comments.append(
-                    {
-                        "path": comment["path"],
-line = comment.get("line")
-if line is None:
-    continue
-formatted_comments.append(
-    {
-        "path": comment["path"],
-        "line": line,
-        "side": comment.get("side", "RIGHT"),
-        "body": body,
-    }
-)
-                        "side": comment.get("side", "RIGHT"),
-                        "body": body,
-                    }
-                )
+                if comment.get("line"):
+                    formatted_comments.append(
+                        {
+                            "path": comment["path"],
+                            "line": comment.get("line"),
+                            "side": comment.get("side", "RIGHT"),
+                            "body": body,
+                        }
+                    )
+                else:
+                    formatted_comments.append(
+                        {
+                            "path": comment["path"],
+                            "side": comment.get("side", "RIGHT"),
+                            "body": body,
+                        }
+                    )
 
             github_review = {
                 "event": review_data["event"],
