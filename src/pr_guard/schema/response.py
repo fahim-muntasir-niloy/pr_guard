@@ -20,15 +20,17 @@ class SuggestedChange(BaseModel):
 
 class InlineComment(BaseModel):
     """
-    Inline PR review comment.
+    Inline PR review comment for GitHub's Reviews API.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     path: str
-    line: int
-    severity: Severity
+    position: Optional[int] = None  # position in the diff (or use line + side)
+    line: Optional[int] = None  # line number (use with side for new-style comments)
+    side: Literal["LEFT", "RIGHT"] = "RIGHT"  # which side of the diff
     body: str  # explanation (no code here)
+    severity: Severity  # keep your severity tracking
     suggestion: Optional[str] = None  # raw code, wrapped later
 
 
