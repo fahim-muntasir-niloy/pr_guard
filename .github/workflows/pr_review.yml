@@ -33,11 +33,62 @@ jobs:
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
         run: |
           uv run main.py comment > review_output.md
-          # Add the header at the top
-          echo -e "### 🤖 PR Guard Bot Review\n\n$(cat review_output.md)" > final_review.md
-
-      - name: Post Comment
-        uses: peter-evans/create-or-update-comment@v4
+      - name: Post AI Review
+        uses: actions/github-script@v7
         with:
-          issue-number: ${{ github.event.pull_request.number }}
-          body-file: final_review.md
+          # github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('review_output.md')) {
+              console.log('No review output found.');
+              return;
+            }
+            const content = fs.readFileSync('review_output.md', 'utf8');
+            if (!content.trim()) {
+              console.log('Review output is empty.');
+              return;
+            }
+
+            const fileBlocks = content.split(/### 📄 File: /).slice(1);
+            const comments = [];
+            let summary = "### 🤖 PR Guard Bot Review\n\n";
+
+            for (const block of fileBlocks) {
+              const lines = block.split('\n');
+              const filePath = lines[0].trim().replace(/`/g, '');
+              
+              // Extract findings and suggestions
+              // Looking for: > **Line:** 123  ... ```suggestion\n...\n```
+              const suggestionRegex = /> \*\*Line:\*\* (\d+)[\s\S]*?```suggestion\n([\s\S]*?)\n```/g;
+              let match;
+              let foundInBlock = false;
+              
+              while ((match = suggestionRegex.exec(block)) !== null) {
+                foundInBlock = true;
+                const line = parseInt(match[1]);
+                const code = match[2];
+                
+                comments.push({
+                  path: filePath,
+                  line: line,
+                  body: `**Suggested Change:**\n\`\`\`suggestion\n${code}\n\`\`\``
+                });
+              }
+
+              if (foundInBlock) {
+                summary += `- 📄 **${filePath}**: Issues found (see inline comments)\n`;
+              } else if (block.includes('No issues found in this file')) {
+                summary += `- 📄 **${filePath}**: ✅ No issues found\n`;
+              } else {
+                summary += `- 📄 **${filePath}**: \n${block}\n`;
+              }
+            }
+
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              body: summary,
+              event: 'COMMENT',
+              comments: comments.length > 0 ? comments : undefined
+            });
