@@ -26,7 +26,6 @@ class InlineComment(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     path: str
-    position: Optional[int] = None  # position in the diff (or use line + side)
     line: Optional[int] = None  # line number (use with side for new-style comments)
     side: Literal["LEFT", "RIGHT"] = "RIGHT"  # which side of the diff
     body: str  # explanation (no code here)
