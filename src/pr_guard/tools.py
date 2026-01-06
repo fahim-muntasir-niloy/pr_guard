@@ -163,7 +163,7 @@ async def get_last_commit_info() -> str:
 
 
 @tool(args_schema=NoInput)
-async def get_list_of_changed_files() -> str:
+async def get_list_of_changed_files() -> dict[str, list[str]]:
     """
     Returns the changed files list of the latest commit (HEAD~1...HEAD).
     Use this to review the changed files of the current branch.
