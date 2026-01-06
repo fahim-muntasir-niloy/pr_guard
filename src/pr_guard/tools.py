@@ -85,7 +85,9 @@ async def list_git_branches() -> str:
 
 
 @tool(args_schema=GitDiffInput)
-async def get_git_diff(base: Optional[str] = None, head: str = "HEAD") -> str:
+async def get_git_diff_between_branches(
+    base: Optional[str] = None, head: str = "HEAD"
+) -> str:
     """
     Returns the git diff between two branches or commits (base...head).
     Use this to see what exact changes were made in a PR.
@@ -96,7 +98,7 @@ async def get_git_diff(base: Optional[str] = None, head: str = "HEAD") -> str:
 
 
 @tool(args_schema=GitLogInput)
-async def get_git_log(limit: int = 10) -> str:
+async def get_git_log(limit: int = 5) -> str:
     """
     Returns the recent git commit log.
     Use this to understand the history of changes.
@@ -160,13 +162,33 @@ async def get_last_commit_info() -> str:
     return f"Changed Files in latest commit:\n{files}\n\nDiff of latest commit:\n{diff}"
 
 
+@tool(args_schema=NoInput)
+async def get_list_of_changed_files() -> str:
+    """
+    Returns the changed files list of the latest commit (HEAD~1...HEAD).
+    Use this to review the changed files of the current branch.
+    """
+    files = _run_git_command(["diff", "--name-only", "HEAD~1", "HEAD"])
+    return {"files": files.splitlines()}
+
+
+@tool(args_schema=ReadFileInput)
+async def get_diff_of_single_file(file_path: str) -> str:
+    """
+    Returns the diff of the latest commit (HEAD~1...HEAD) for a specific file.
+    Use this to review the very last change of a specific file on the current branch.
+    """
+    return _run_git_command(["diff", "HEAD~1", "HEAD", "--", file_path])
+
+
 TOOLS = [
+    get_list_of_changed_files,
+    get_diff_of_single_file,
     list_files_tree,
     read_file_cat,
     list_git_branches,
-    get_git_diff,
+    get_git_diff_between_branches,
     get_git_log,
     search_code_grep,
     list_changed_files_between_branches,
-    get_last_commit_info,
 ]

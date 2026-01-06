@@ -33,7 +33,8 @@ jobs:
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
         run: |
           uv run main.py comment > review_output.md
-          # Add the header at the top
+      - name: Prepare Review Comment
+        run: |
           echo -e "### 🤖 PR Guard Bot Review\n\n$(cat review_output.md)" > final_review.md
 
       - name: Post Comment
