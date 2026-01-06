@@ -64,7 +64,12 @@ async def run_review(plain: bool = False):
                     body += f"\n\n```suggestion\n{comment['suggestion']}\n```"
 
                 formatted_comments.append(
-                    {"path": comment["path"], "line": comment["line"], "body": body}
+                    {
+                        "path": comment["path"],
+                        "line": comment.get("line"),
+                        "side": comment.get("side", "RIGHT"),
+                        "body": body,
+                    }
                 )
 
             github_review = {

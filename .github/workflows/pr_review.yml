@@ -36,11 +36,12 @@ jobs:
 
       - name: Post PR Review with suggestions
         env:
-          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.url }}
+          # PR_REVIEW_EVENT_OVERRIDE: "COMMENT" # Uncomment to force COMMENT state
         run: |
           curl -s -X POST \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "Content-Type: application/json" \
             "$PR_URL/reviews" \
