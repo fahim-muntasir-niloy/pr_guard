@@ -52,10 +52,11 @@ async def run_review(plain: bool = False):
             )
 
             # Extract the structured response
-            review_data = res["messages"][-1].tool_calls[0]["args"]
+            review_data = res["structured_response"]
 
             # Map comments to include suggestions if present
             formatted_comments = []
+            review_data = review_data.model_dump()
             for comment in review_data.get("comments", []):
                 body = comment["body"]
                 if comment.get("suggestion"):
@@ -72,7 +73,7 @@ async def run_review(plain: bool = False):
                 "comments": formatted_comments,
             }
 
-            print(json.dumps(github_review, indent=2))
+            print(json.dumps(github_review, indent=4))
 
         if not plain:
             with status_manager:
