@@ -73,8 +73,6 @@ For each reviewed file:
 
 ---
 
-**Inline Comments (ONLY if changes are required):**
-
 > [!IMPORTANT]
 > **Severity:** <Blocking | High | Medium | Low>
 > **Line:** <line_number>
@@ -82,7 +80,8 @@ For each reviewed file:
 > **Required Fix:** <What must change>
 
 **Suggested Change:**
-```suggestion
-<The improved code block that should replace the original lines>
-```
+````suggestion
+<line_number> - <original_code_line>
+<line_number> + <improved_code_line>
+````
 """
