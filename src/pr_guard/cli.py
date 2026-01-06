@@ -5,6 +5,7 @@ from rich.panel import Panel
 from pr_guard.agent import init_agent
 from pr_guard.config import settings
 import os
+import json
 
 app = typer.Typer(
     name="pr-guard",
@@ -39,81 +40,42 @@ async def run_review(plain: bool = False):
         async def _run():
             agent = await init_agent()
 
-            async for mode, data in agent.astream(
+            res = await agent.ainvoke(
                 {
                     "messages": [
                         {
                             "role": "user",
-                            "content": """Execute a pre-merge code review for the latest git commits (up to the last merge).
-
-                                            You must:
-                                            - Use git tools to identify changed files
-                                            - Review modified lines and their immediate context
-                                            - Produce GitHub-style diff comments
-                                            - Assign severity to each issue
-                                            - Never repeat all the changes in the diff; only suggest necessary improvements.
-                                            
-                                            **Output Requirements:**
-                                            - Use `### 📄 File: filename` for each file.
-                                            - Use `> [!IMPORTANT]` or `> [!NOTE]` for comments depending on severity.
-                                            - ALWAYS wrap diffs in ```diff ... ``` blocks.
-                                            - Use bold text for labels like **Severity**, **Issue**, etc.
-                                            - Do not include explanatory conversational filler.
-
-                                            Output the review in structured, clean Markdown.""",
+                            "content": "Execute a pre-merge code review for the latest git commits.",
                         }
                     ]
-                },
-                stream_mode=["messages", "updates"],
-            ):
-                # 1. Capture and print plain text tokens in real-time
-                if mode == "messages":
-                    message_chunk, metadata = data
+                }
+            )
 
-                    # Print the text content of the chunk
-                    if message_chunk.content:
-                        if not plain:
-                            status.stop()
-                            console.print(message_chunk.content, end="")
-                            status.start()
-                        else:
-                            console.print(message_chunk.content, end="")
+            # Extract the structured response
+            review_data = res["messages"][-1].tool_calls[0]["args"]
 
-                    # Capture incremental tool names
-                    if (
-                        not plain
-                        and hasattr(message_chunk, "tool_call_chunks")
-                        and message_chunk.tool_call_chunks
-                    ):
-                        for chunk in message_chunk.tool_call_chunks:
-                            if chunk.get("name"):
-                                status.stop()
-                                console.print(
-                                    f"\n[bold blue]Calling Tool:[/bold blue] {chunk['name']}\n"
-                                )
-                                status.start()
+            # Map comments to include suggestions if present
+            formatted_comments = []
+            for comment in review_data.get("comments", []):
+                body = comment["body"]
+                if comment.get("suggestion"):
+                    # Wrap suggestion in ```suggestion ... ``` as GitHub expects
+                    body += f"\n\n```suggestion\n{comment['suggestion']}\n```"
 
-                # 2. Handle final state updates
-                if mode == "updates":
-                    for node_name, update in data.items():
-                        # If your graph adds the final result to the 'messages' key
-                        if "messages" in update:
-                            last_msg = update["messages"][-1]
-                            # Only act if this is the final AI response (not a tool call)
-                            if last_msg.type == "ai" and not last_msg.tool_calls:
-                                if not plain:
-                                    status.stop()
-                                    console.print(
-                                        "\n\n[bold green]Review Summary:[/bold green]"
-                                    )
-                                    console.print("-" * 80)
-                                    # Optional: Print final collected content if streaming missed chunks
-                                    # console.print(last_msg.content)
-                                    console.print("-" * 80)
-                                    status.start()
+                formatted_comments.append(
+                    {"path": comment["path"], "line": comment["line"], "body": body}
+                )
+
+            github_review = {
+                "event": review_data["event"],
+                "body": review_data["body"],
+                "comments": formatted_comments,
+            }
+
+            print(json.dumps(github_review, indent=2))
 
         if not plain:
-            with status_manager as status:
+            with status_manager:
                 await _run()
         else:
             await _run()

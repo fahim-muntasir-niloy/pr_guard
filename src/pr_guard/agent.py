@@ -5,7 +5,7 @@ from langchain.agents.middleware import ToolCallLimitMiddleware
 from pr_guard.prompt import system_prompt
 from pr_guard.model import llm
 from pr_guard.tools import TOOLS
-from pr_guard.schema.response import pr_agent_response
+from pr_guard.schema.response import GitHubPRReview
 
 
 async def init_agent():
@@ -15,6 +15,6 @@ async def init_agent():
         system_prompt=system_prompt,
         # middleware=[ToolCallLimitMiddleware(run_limit=10)],
         name="PR_Guard_Agent",
-        # response_format=ToolStrategy(pr_agent_response),
+        response_format=ToolStrategy(GitHubPRReview),
     )
     return agent

@@ -1,75 +1,46 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Literal, Optional, List
+from typing import Literal, List, Optional
 
 
+ReviewEvent = Literal["APPROVE", "REQUEST_CHANGES", "COMMENT"]
 Severity = Literal["blocker", "major", "minor", "nit"]
-Verdict = Literal["Approve", "Request Changes", "Comment"]
 
 
-class DiffHunk(BaseModel):
+class SuggestedChange(BaseModel):
     """
-    Represents a GitHub-style diff hunk.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    old_range: str  # e.g. "-12,6"
-    new_range: str  # e.g. "+12,9"
-    diff: str  # raw diff text with +++ / --- / @@
-
-
-class InlineReviewComment(BaseModel):
-    """
-    A single inline review comment tied to a diff.
+    A single suggested code change that GitHub can apply.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    file_path: str
-    line_number: int  # line number in the NEW file
+    path: str  # file path relative to repo root
+    line: int  # line number in the NEW file (RIGHT side)
+    suggestion: str  # replacement code only (no diff markers)
+
+
+class InlineComment(BaseModel):
+    """
+    Inline PR review comment.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    line: int
     severity: Severity
-    message: str  # concise, actionable feedback
-    suggestion: Optional[str] = None
-    diff_hunk: Optional[DiffHunk]  # required when commenting inline
+    body: str  # explanation (no code here)
+    suggestion: Optional[str] = None  # raw code, wrapped later
 
 
-class FileReview(BaseModel):
+class GitHubPRReview(BaseModel):
     """
-    Review summary for a single changed file.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    file_path: str
-    change_type: Literal["added", "modified", "deleted"]
-    intent: str  # what this change is trying to do
-    risk_level: Literal["low", "medium", "high"]
-    inline_comments: List[InlineReviewComment]
-
-
-class PRSummary(BaseModel):
-    """
-    High-level PR understanding.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    overview: str  # 2–4 sentences, no fluff
-    main_changes: List[str]  # bullet-style key changes
-    risks: List[str]  # empty if none
-
-
-class pr_agent_response(BaseModel):
-    """
-    Final PR review payload.
+    Payload directly mappable to GitHub's PR Review API.
     """
 
     model_config = ConfigDict(
         extra="forbid", json_schema_extra={"additionalProperties": False}
     )
 
-    summary: PRSummary
-    files: List[FileReview]
-    verdict: Verdict
-    blocking_issues_count: int
-    overall_comment: str  # appears as top-level GitHub review comment
+    event: ReviewEvent
+    body: str  # top-level review comment
+    comments: List[InlineComment]

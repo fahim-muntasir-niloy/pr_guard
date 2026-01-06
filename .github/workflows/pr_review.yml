@@ -26,19 +26,22 @@ jobs:
       - name: Set up Python
         run: uv python install
 
-      - name: Run PR Review
+      - name: Run PR Review (generate review JSON)
         id: review
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
         run: |
-          uv run main.py comment > review_output.md
-      - name: Prepare Review Comment
-        run: |
-          echo -e "### 🤖 PR Guard Bot Review\n\n$(cat review_output.md)" > final_review.md
+          uv run main.py review --plain > review.json
 
-      - name: Post Comment
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          issue-number: ${{ github.event.pull_request.number }}
-          body-file: final_review.md
+      - name: Post PR Review with suggestions
+        env:
+          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.url }}
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            "$PR_URL/reviews" \
+            -d @review.json
