@@ -66,7 +66,17 @@ async def run_review(plain: bool = False):
                 formatted_comments.append(
                     {
                         "path": comment["path"],
-                        "line": comment.get("line"),
+line = comment.get("line")
+if line is None:
+    continue
+formatted_comments.append(
+    {
+        "path": comment["path"],
+        "line": line,
+        "side": comment.get("side", "RIGHT"),
+        "body": body,
+    }
+)
                         "side": comment.get("side", "RIGHT"),
                         "body": body,
                     }
