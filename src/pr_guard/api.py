@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from pr_guard.tools import (
     _list_files_tree,
     _list_changed_files_between_branches,
@@ -117,20 +116,6 @@ async def review_pr():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# Serve Landing Page
-@app.get("/")
-async def read_index():
-    index_path = os.path.join(
-        os.path.dirname(__file__), "..", "..", "web", "index.html"
-    )
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return {"message": "Landing page not found. Please check web/index.html"}
-
-
-# Optional: Mount static files if you add images/css files
-# app.mount("/static", StaticFiles(directory="web"), name="static")
 
 if __name__ == "__main__":
     import uvicorn

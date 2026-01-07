@@ -2,10 +2,6 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.syntax import Syntax
-from rich.live import Live
-from rich.markdown import Markdown
-from rich.console import Group
-from rich.text import Text
 from pr_guard.agent import init_agent
 from pr_guard.config import settings
 from pr_guard.tools import (
@@ -36,134 +32,7 @@ def setup_env():
     os.environ["LANGSMITH_PROJECT"] = "pr-agent"
 
 
-# async def run_review(plain: bool = False):
-#     if not plain:
-#         console.print(
-#             Panel(
-#                 "[bold blue]🛡️ PR Guard[/bold blue] - [dim]Advanced AI Code Reviewer[/dim]",
-#                 expand=False,
-#                 border_style="blue",
-#             )
-#         )
-#     try:
-#         setup_env()
-
-#         status_manager = (
-#             console.status(
-#                 "[bold green]🧠 Agent is analyzing changes...", spinner="dots"
-#             )
-#             if not plain
-#             else asyncio.Event()
-#         )
-
-#         async def _run():
-#             agent = await init_agent()
-
-#             res = await agent.ainvoke(
-#                 {
-#                     "messages": [
-#                         {
-#                             "role": "user",
-#                             "content": "Execute a full code review for the latest git commits. Call the tools needed to understand the scope and diff.",
-#                         }
-#                     ]
-#                 }
-#             )
-
-#             # Extract the structured response
-#             review_data = res["structured_response"]
-#             review_dict = review_data.model_dump()
-
-#             if plain:
-#                 print(json.dumps(review_dict, indent=4))
-#                 return
-
-#             # --- BEUTIFUL RICH REPORT ---
-#             event = review_dict.get("event", "COMMENT")
-#             event_color = (
-#                 "green"
-#                 if event == "APPROVE"
-#                 else "red"
-#                 if event == "REQUEST_CHANGES"
-#                 else "yellow"
-#             )
-
-#             console.print("\n")
-#             console.print(
-#                 Panel(
-#                     f"[bold {event_color}]{event}[/bold {event_color}]\n\n{review_dict.get('body', '')}",
-#                     title="🏁 Review Result",
-#                     border_style=event_color,
-#                     padding=(1, 2),
-#                 )
-#             )
-
-#             if not review_dict.get("comments"):
-#                 console.print(
-#                     "\n✨ [bold green]No issues found! Your code looks great.[/bold green]"
-#                 )
-#                 return
-
-#             console.print(
-#                 f"\n[bold]🔍 Found {len(review_dict['comments'])} items to address:[/bold]\n"
-#             )
-
-#             for comment in review_dict["comments"]:
-#                 severity = comment.get("severity", "nit").lower()
-#                 sev_color = (
-#                     "red"
-#                     if severity == "blocker"
-#                     else "orange3"
-#                     if severity == "major"
-#                     else "yellow"
-#                     if severity == "minor"
-#                     else "dim"
-#                 )
-
-#                 # File and Line info
-#                 info = f"[bold cyan]{comment['path']}[/bold cyan] : [bold white]Line {comment.get('line', '?')}[/bold white]"
-#                 sev_badge = f"[{sev_color}]▐ {severity.upper()}[/{sev_color}]"
-
-#                 body_panel = Panel(
-#                     f"{comment['body']}",
-#                     title=f"{sev_badge} {info}",
-#                     title_align="left",
-#                     border_style=sev_color,
-#                     padding=(0, 1),
-#                 )
-#                 console.print(body_panel)
-
-#                 if comment.get("suggestion"):
-#                     syntax = Syntax(
-#                         comment["suggestion"],
-#                         os.path.splitext(comment["path"])[1].lstrip(".") or "python",
-#                         theme="monokai",
-#                         line_numbers=True,
-#                         line_range=(1, len(comment["suggestion"].splitlines())),
-#                     )
-#                     console.print(
-#                         Panel(
-#                             syntax,
-#                             title="💡 Suggested Fix",
-#                             border_style="green",
-#                         )
-#                     )
-#                 console.print("")
-
-#         if not plain:
-#             with status_manager:
-#                 await _run()
-#         else:
-#             await _run()
-
-#     except Exception as e:
-#         if not plain:
-#             console.print(f"\n[red]❌ Error:[/red] {e}")
-#         else:
-#             print(f"Error: {e}")
-#         raise typer.Exit(code=1)
-
-
+# streaming response in CLI
 async def run_review(plain: bool = False):
     console.print("\n")
     console.print(
@@ -203,7 +72,7 @@ async def run_review(plain: bool = False):
                             console.print(
                                 f"🔧 [bold dim]Calling tool:[/bold dim] [cyan]{tc['name']}[/cyan]"
                             )
-                            console.print(f"   [dim]Args: {args_json}[/dim]")
+                            console.print(f"[dim]   Input: {args_json}[/dim]")
                         else:
                             print(f"Calling tool: {tc['name']} with {args_json}")
 
@@ -296,98 +165,6 @@ def review(
     🤖 [bold green]Review[/bold green] the current git changes.
     """
     asyncio.run(run_review(plain=plain))
-
-
-async def run_review_and_post_to_github(plain: bool = False):
-    if not plain:
-        console.print(
-            Panel("[bold blue]PR Guard[/bold blue] - Initialized", expand=False)
-        )
-    try:
-        setup_env()
-
-        # Use a context manager for status if not in plain mode
-        status_manager = (
-            console.status("[bold green]Agent is working...", spinner="dots")
-            if not plain
-            else asyncio.Event()  # Dummy object for plain mode
-        )
-
-        async def _run():
-            agent = await init_agent()
-
-            res = await agent.ainvoke(
-                {
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": "Execute a pre-merge code review for the latest git commits.",
-                        }
-                    ]
-                }
-            )
-
-            # Extract the structured response
-            review_data = res["structured_response"]
-
-            # Map comments to include suggestions if present
-            formatted_comments = []
-            review_data = review_data.model_dump()
-            for comment in review_data.get("comments", []):
-                body = comment["body"]
-                if comment.get("suggestion"):
-                    # Wrap suggestion in ```suggestion ... ``` as GitHub expects
-                    body += f"\n\n```suggestion\n{comment['suggestion']}\n```"
-                if comment.get("line"):
-                    formatted_comments.append(
-                        {
-                            "path": comment["path"],
-                            "line": comment.get("line"),
-                            "side": comment.get("side", "RIGHT"),
-                            "body": body,
-                        }
-                    )
-                else:
-                    formatted_comments.append(
-                        {
-                            "path": comment["path"],
-                            "side": comment.get("side", "RIGHT"),
-                            "body": body,
-                        }
-                    )
-
-            github_review = {
-                "event": review_data["event"],
-                "body": review_data["body"],
-                "comments": formatted_comments,
-            }
-
-            print(json.dumps(github_review, indent=4))
-
-        if not plain:
-            with status_manager:
-                await _run()
-        else:
-            await _run()
-
-    except Exception as e:
-        if not plain:
-            console.print(f"\n[red]Error:[/red] {e}")
-        else:
-            print(f"Error: {e}")
-        raise typer.Exit(code=1)
-
-
-@app.command()
-def review_and_post_to_github(
-    plain: bool = typer.Option(
-        False, "--plain", help="Output plain Markdown without styling."
-    ),
-):
-    """
-    Post review to GitHub.
-    """
-    asyncio.run(run_review_and_post_to_github(plain=plain))
 
 
 @app.command()
@@ -521,39 +298,6 @@ def cat(path: str = typer.Argument(..., help="File path to read")):
         ext = os.path.splitext(path)[1].lstrip(".") or "txt"
         syntax = Syntax(content, ext, theme="monokai", line_numbers=True)
         console.print(Panel(syntax, title=f"📄 {path}"))
-
-    asyncio.run(_run())
-
-
-@app.command()
-def summary():
-    """
-    📋 [bold green]Summary[/bold green] of the current PR changes.
-    """
-
-    async def _run():
-        setup_env()
-        with console.status("[bold green]Calculating summary...", spinner="arc"):
-            agent = await init_agent()
-            res = await agent.ainvoke(
-                {
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": "Provide a high-level summary of the changes in this PR. List key files and the main intent of the modifications.",
-                        }
-                    ]
-                }
-            )
-            console.print("\n")
-            console.print(
-                Panel(
-                    res["messages"][-1].content,
-                    title="📋 PR Summary",
-                    border_style="green",
-                    padding=(1, 2),
-                )
-            )
 
     asyncio.run(_run())
 
