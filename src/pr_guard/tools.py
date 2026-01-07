@@ -203,7 +203,7 @@ async def get_diff_of_single_file(file_path: str) -> str:
     """
     diff = _run_git_command(["diff", "HEAD~1", "HEAD", "--", file_path])
     if not diff:
-        return "No changes found for this file."
+        return "[position: 1] No changes found for this file."
 
     lines = diff.splitlines()
     marked_lines = []
