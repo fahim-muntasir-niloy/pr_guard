@@ -36,133 +36,249 @@ def setup_env():
     os.environ["LANGSMITH_PROJECT"] = "pr-agent"
 
 
+# async def run_review(plain: bool = False):
+#     if not plain:
+#         console.print(
+#             Panel(
+#                 "[bold blue]🛡️ PR Guard[/bold blue] - [dim]Advanced AI Code Reviewer[/dim]",
+#                 expand=False,
+#                 border_style="blue",
+#             )
+#         )
+#     try:
+#         setup_env()
+
+#         status_manager = (
+#             console.status(
+#                 "[bold green]🧠 Agent is analyzing changes...", spinner="dots"
+#             )
+#             if not plain
+#             else asyncio.Event()
+#         )
+
+#         async def _run():
+#             agent = await init_agent()
+
+#             res = await agent.ainvoke(
+#                 {
+#                     "messages": [
+#                         {
+#                             "role": "user",
+#                             "content": "Execute a full code review for the latest git commits. Call the tools needed to understand the scope and diff.",
+#                         }
+#                     ]
+#                 }
+#             )
+
+#             # Extract the structured response
+#             review_data = res["structured_response"]
+#             review_dict = review_data.model_dump()
+
+#             if plain:
+#                 print(json.dumps(review_dict, indent=4))
+#                 return
+
+#             # --- BEUTIFUL RICH REPORT ---
+#             event = review_dict.get("event", "COMMENT")
+#             event_color = (
+#                 "green"
+#                 if event == "APPROVE"
+#                 else "red"
+#                 if event == "REQUEST_CHANGES"
+#                 else "yellow"
+#             )
+
+#             console.print("\n")
+#             console.print(
+#                 Panel(
+#                     f"[bold {event_color}]{event}[/bold {event_color}]\n\n{review_dict.get('body', '')}",
+#                     title="🏁 Review Result",
+#                     border_style=event_color,
+#                     padding=(1, 2),
+#                 )
+#             )
+
+#             if not review_dict.get("comments"):
+#                 console.print(
+#                     "\n✨ [bold green]No issues found! Your code looks great.[/bold green]"
+#                 )
+#                 return
+
+#             console.print(
+#                 f"\n[bold]🔍 Found {len(review_dict['comments'])} items to address:[/bold]\n"
+#             )
+
+#             for comment in review_dict["comments"]:
+#                 severity = comment.get("severity", "nit").lower()
+#                 sev_color = (
+#                     "red"
+#                     if severity == "blocker"
+#                     else "orange3"
+#                     if severity == "major"
+#                     else "yellow"
+#                     if severity == "minor"
+#                     else "dim"
+#                 )
+
+#                 # File and Line info
+#                 info = f"[bold cyan]{comment['path']}[/bold cyan] : [bold white]Line {comment.get('line', '?')}[/bold white]"
+#                 sev_badge = f"[{sev_color}]▐ {severity.upper()}[/{sev_color}]"
+
+#                 body_panel = Panel(
+#                     f"{comment['body']}",
+#                     title=f"{sev_badge} {info}",
+#                     title_align="left",
+#                     border_style=sev_color,
+#                     padding=(0, 1),
+#                 )
+#                 console.print(body_panel)
+
+#                 if comment.get("suggestion"):
+#                     syntax = Syntax(
+#                         comment["suggestion"],
+#                         os.path.splitext(comment["path"])[1].lstrip(".") or "python",
+#                         theme="monokai",
+#                         line_numbers=True,
+#                         line_range=(1, len(comment["suggestion"].splitlines())),
+#                     )
+#                     console.print(
+#                         Panel(
+#                             syntax,
+#                             title="💡 Suggested Fix",
+#                             border_style="green",
+#                         )
+#                     )
+#                 console.print("")
+
+#         if not plain:
+#             with status_manager:
+#                 await _run()
+#         else:
+#             await _run()
+
+#     except Exception as e:
+#         if not plain:
+#             console.print(f"\n[red]❌ Error:[/red] {e}")
+#         else:
+#             print(f"Error: {e}")
+#         raise typer.Exit(code=1)
+
+
 async def run_review(plain: bool = False):
-    if not plain:
+    agent = await init_agent()
+
+    # Track the result for the final report
+    final_structured_res = None
+
+    # Use modern astream with "updates" mode
+    async for chunk in agent.astream(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Execute a full code review for the latest git commits. Call the tools needed to understand the scope and diff.",
+                }
+            ]
+        },
+        stream_mode="updates",
+    ):
+        for node_name, update in chunk.items():
+            # 1. Stream the "Steps" (Detect tool calls in the message history)
+            if "messages" in update:
+                last_msg = update["messages"][-1]
+                # Check for tool calls in the message
+                if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
+                    for tc in last_msg.tool_calls:
+                        # Format the arguments as a clean string
+                        args_json = json.dumps(tc["args"])
+
+                        if not plain:
+                            console.print(
+                                f"🔧 [bold dim]Calling tool:[/bold dim] [cyan]{tc['name']}[/cyan]"
+                            )
+                            console.print(f"   [dim]Args: {args_json}[/dim]")
+                        else:
+                            print(f"Calling tool: {tc['name']} with {args_json}")
+
+            # 2. Capture the structured response if this node provides it
+            if "structured_response" in update:
+                final_structured_res = update["structured_response"]
+
+    if not final_structured_res:
+        return
+
+    # --- BEUTIFUL RICH REPORT (Your existing logic) ---
+    review_dict = final_structured_res.model_dump()
+
+    if plain:
+        print(json.dumps(review_dict, indent=4))
+        return
+
+    event = review_dict.get("event", "COMMENT")
+    event_color = (
+        "green"
+        if event == "APPROVE"
+        else "red"
+        if event == "REQUEST_CHANGES"
+        else "yellow"
+    )
+
+    console.print("\n")
+    console.print(
+        Panel(
+            f"[bold {event_color}]{event}[/bold {event_color}]\n\n{review_dict.get('body', '')}",
+            title="🏁 Review Result",
+            border_style=event_color,
+            padding=(1, 2),
+        )
+    )
+
+    if not review_dict.get("comments"):
+        console.print(
+            "\n✨ [bold green]No issues found! Your code looks great.[/bold green]"
+        )
+        return
+
+    console.print(
+        f"\n[bold]🔍 Found {len(review_dict['comments'])} items to address:[/bold]\n"
+    )
+
+    for comment in review_dict["comments"]:
+        severity = comment.get("severity", "nit").lower()
+        sev_color = (
+            "red"
+            if severity == "blocker"
+            else "orange3"
+            if severity == "major"
+            else "yellow"
+            if severity == "minor"
+            else "dim"
+        )
+
+        info = f"[bold cyan]{comment['path']}[/bold cyan] : [bold white]Line {comment.get('line', '?')}[/bold white]"
+        sev_badge = f"[{sev_color}]▐ {severity.upper()}[/{sev_color}]"
+
         console.print(
             Panel(
-                "[bold blue]🛡️ PR Guard[/bold blue] - [dim]Advanced AI Code Reviewer[/dim]",
-                expand=False,
-                border_style="blue",
+                f"{comment['body']}",
+                title=f"{sev_badge} {info}",
+                title_align="left",
+                border_style=sev_color,
+                padding=(0, 1),
             )
         )
-    try:
-        setup_env()
 
-        status_manager = (
-            console.status(
-                "[bold green]🧠 Agent is analyzing changes...", spinner="dots"
+        if comment.get("suggestion"):
+            syntax = Syntax(
+                comment["suggestion"],
+                os.path.splitext(comment["path"])[1].lstrip(".") or "python",
+                theme="monokai",
+                line_numbers=True,
             )
-            if not plain
-            else asyncio.Event()
-        )
-
-        async def _run():
-            agent = await init_agent()
-
-            res = await agent.ainvoke(
-                {
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": "Execute a full code review for the latest git commits. Call the tools needed to understand the scope and diff.",
-                        }
-                    ]
-                }
-            )
-
-            # Extract the structured response
-            review_data = res["structured_response"]
-            review_dict = review_data.model_dump()
-
-            if plain:
-                print(json.dumps(review_dict, indent=4))
-                return
-
-            # --- BEUTIFUL RICH REPORT ---
-            event = review_dict.get("event", "COMMENT")
-            event_color = (
-                "green"
-                if event == "APPROVE"
-                else "red"
-                if event == "REQUEST_CHANGES"
-                else "yellow"
-            )
-
-            console.print("\n")
             console.print(
-                Panel(
-                    f"[bold {event_color}]{event}[/bold {event_color}]\n\n{review_dict.get('body', '')}",
-                    title="🏁 Review Result",
-                    border_style=event_color,
-                    padding=(1, 2),
-                )
+                Panel(syntax, title="💡 Suggested Fix", border_style="green", dim=True)
             )
-
-            if not review_dict.get("comments"):
-                console.print(
-                    "\n✨ [bold green]No issues found! Your code looks great.[/bold green]"
-                )
-                return
-
-            console.print(
-                f"\n[bold]🔍 Found {len(review_dict['comments'])} items to address:[/bold]\n"
-            )
-
-            for comment in review_dict["comments"]:
-                severity = comment.get("severity", "nit").lower()
-                sev_color = (
-                    "red"
-                    if severity == "blocker"
-                    else "orange3"
-                    if severity == "major"
-                    else "yellow"
-                    if severity == "minor"
-                    else "dim"
-                )
-
-                # File and Line info
-                info = f"[bold cyan]{comment['path']}[/bold cyan] : [bold white]Line {comment.get('line', '?')}[/bold white]"
-                sev_badge = f"[{sev_color}]▐ {severity.upper()}[/{sev_color}]"
-
-                body_panel = Panel(
-                    f"{comment['body']}",
-                    title=f"{sev_badge} {info}",
-                    title_align="left",
-                    border_style=sev_color,
-                    padding=(0, 1),
-                )
-                console.print(body_panel)
-
-                if comment.get("suggestion"):
-                    syntax = Syntax(
-                        comment["suggestion"],
-                        os.path.splitext(comment["path"])[1].lstrip(".") or "python",
-                        theme="monokai",
-                        line_numbers=True,
-                        line_range=(1, len(comment["suggestion"].splitlines())),
-                    )
-                    console.print(
-                        Panel(
-                            syntax,
-                            title="💡 Suggested Fix",
-                            border_style="green",
-                            dim=True,
-                        )
-                    )
-                console.print("")
-
-        if not plain:
-            with status_manager:
-                await _run()
-        else:
-            await _run()
-
-    except Exception as e:
-        if not plain:
-            console.print(f"\n[red]❌ Error:[/red] {e}")
-        else:
-            print(f"Error: {e}")
-        raise typer.Exit(code=1)
+        console.print("")
 
 
 @app.command()
