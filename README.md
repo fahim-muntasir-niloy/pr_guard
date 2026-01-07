@@ -80,9 +80,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: PR Guard Review
-        uses: ./ .github/workflows/pr_review.yml
-        with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.url }}
+        run: |
+          uv sync
+          PYTHONPATH=src uv run src/pr_guard/logic/review_generator.py > review.json
+          curl -s -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            "$PR_URL/reviews" \
+            -d @review.json
 ```
 
 ---
