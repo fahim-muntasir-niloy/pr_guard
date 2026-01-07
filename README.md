@@ -13,12 +13,12 @@ Distribute PR Guard to your team with a single command:
 
 ### For Windows (PowerShell):
 ```powershell
-iex (iwr -useb https://raw.githubusercontent.com/fahim-muntasir-niloy/pr_guard/main/install.ps1).Content
+iex (iwr -useb https://raw.githubusercontent.com/fahim-muntasir-niloy/pr_guard/master/install.ps1).Content
 ```
 
 ### For macOS/Linux:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fahim-muntasir-niloy/pr_guard/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/fahim-muntasir-niloy/pr_guard/master/install.sh | bash
 ```
 
 ---
