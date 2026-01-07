@@ -165,6 +165,13 @@ def setup_env():
 
 
 async def run_review(plain: bool = False):
+    console.print("\n")
+    console.print(
+        "[bold blue]🛡️ PR Guard[/bold blue] - [dim]Advanced AI Code Reviewer[/dim]"
+    )
+    console.print("\n")
+    setup_env()
+
     agent = await init_agent()
 
     # Track the result for the final report
@@ -275,9 +282,7 @@ async def run_review(plain: bool = False):
                 theme="monokai",
                 line_numbers=True,
             )
-            console.print(
-                Panel(syntax, title="💡 Suggested Fix", border_style="green", dim=True)
-            )
+            console.print(Panel(syntax, title="💡 Suggested Fix", border_style="green"))
         console.print("")
 
 
