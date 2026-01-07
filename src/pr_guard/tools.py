@@ -1,8 +1,6 @@
 import os
-import subprocess
-from typing import List, Optional, Type
+from typing import Optional
 from langchain.tools import tool
-from pydantic import BaseModel, Field, ConfigDict
 from pr_guard.utils.git_utils import _run_git_command, get_default_branch
 from pr_guard.schema.tool_schema import (
     ListFilesInput,
@@ -15,12 +13,7 @@ from pr_guard.schema.tool_schema import (
 )
 
 
-@tool(args_schema=ListFilesInput)
-async def list_files_tree(path: str = ".", max_depth: int = 3) -> str:
-    """
-    Returns the directory structure of the specified path in a tree-like format.
-    Use this to understand the project structure.
-    """
+async def _list_files_tree(path: str = ".", max_depth: int = 3) -> str:
     output = []
     ignored = {".git", "__pycache__", "node_modules", ".venv", "venv"}
 
@@ -53,12 +46,16 @@ async def list_files_tree(path: str = ".", max_depth: int = 3) -> str:
     return "\n".join(output)
 
 
-@tool(args_schema=ReadFileInput)
-async def read_file_cat(file_path: str) -> str:
+@tool(args_schema=ListFilesInput)
+async def list_files_tree(path: str = ".", max_depth: int = 3) -> str:
     """
-    Reads the content of a specific file.
-    Use this to see the implementation details of a file.
+    Returns the directory structure of the specified path in a tree-like format.
+    Use this to understand the project structure.
     """
+    return await _list_files_tree(path=path, max_depth=max_depth)
+
+
+async def _read_file_cat(file_path: str) -> str:
     if not os.path.exists(file_path):
         return f"Error: File '{file_path}' not found."
 
@@ -75,6 +72,15 @@ async def read_file_cat(file_path: str) -> str:
         return f"Error reading file: {str(e)}"
 
 
+@tool(args_schema=ReadFileInput)
+async def read_file_cat(file_path: str) -> str:
+    """
+    Reads the content of a specific file.
+    Use this to see the implementation details of a file.
+    """
+    return await _read_file_cat(file_path=file_path)
+
+
 @tool(args_schema=NoInput)
 async def list_git_branches() -> str:
     """
@@ -82,6 +88,14 @@ async def list_git_branches() -> str:
     Use this to see the available branches and get the default branch name.
     """
     return _run_git_command(["branch", "-a"])
+
+
+async def _get_git_diff_between_branches(
+    base: Optional[str] = None, head: str = "HEAD"
+) -> str:
+    if base is None:
+        base = get_default_branch()
+    return _run_git_command(["diff", f"{base}...{head}"])
 
 
 @tool(args_schema=GitDiffInput)
@@ -92,9 +106,11 @@ async def get_git_diff_between_branches(
     Returns the git diff between two branches or commits (base...head).
     Use this to see what exact changes were made in a PR.
     """
-    if base is None:
-        base = get_default_branch()
-    return _run_git_command(["diff", f"{base}...{head}"])
+    return await _get_git_diff_between_branches(base=base, head=head)
+
+
+async def _get_git_log(limit: int = 5) -> str:
+    return _run_git_command(["log", "-n", str(limit), "--oneline", "--graph", "--all"])
 
 
 @tool(args_schema=GitLogInput)
@@ -103,7 +119,7 @@ async def get_git_log(limit: int = 5) -> str:
     Returns the recent git commit log.
     Use this to understand the history of changes.
     """
-    return _run_git_command(["log", f"-n {limit}", "--oneline", "--graph", "--all"])
+    return await _get_git_log(limit=limit)
 
 
 @tool(args_schema=SearchCodeInput)
@@ -138,6 +154,14 @@ async def search_code_grep(pattern: str, path: str = ".") -> str:
     return "\n".join(results[:50])
 
 
+async def _list_changed_files_between_branches(
+    base: Optional[str] = None, head: Optional[str] = "HEAD"
+) -> str:
+    if base is None:
+        base = get_default_branch()
+    return _run_git_command(["diff", "--name-only", f"{base}...{head}"])
+
+
 @tool(args_schema=ListChangedFilesInput)
 async def list_changed_files_between_branches(
     base: Optional[str] = None, head: Optional[str] = "HEAD"
@@ -146,9 +170,7 @@ async def list_changed_files_between_branches(
     Lists the files that have changed between two git references (e.g., base...head).
     If base is not provided, it defaults to master/main.
     """
-    if base is None:
-        base = get_default_branch()
-    return _run_git_command(["diff", "--name-only", f"{base}...{head}"])
+    return await _list_changed_files_between_branches(base=base, head=head)
 
 
 @tool(args_schema=NoInput)
