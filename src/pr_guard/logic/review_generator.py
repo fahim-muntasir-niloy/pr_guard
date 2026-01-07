@@ -47,6 +47,9 @@ async def generate_github_review_payload() -> Dict[str, Any]:
                 {
                     "path": comment["path"],
                     "position": comment["position"],
+                    "line": comment.get("line"),
+                    "side": comment.get("side"),
+                    "severity": comment.get("severity"),
                     "body": body,
                 }
             )
