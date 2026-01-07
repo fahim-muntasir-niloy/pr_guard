@@ -68,8 +68,8 @@ You MUST output a SINGLE JSON object matching this structure exactly:
   "comments": [
     {
       "path": "<file path>",
-      "line": <source file line (optional context)>,
       "position": <hunk position from the diff markers>,
+      "line": <line number where the change should be applied in the NEW file>,
       "severity": "blocker | major | minor | nit",
       "body": "<concise explanation of the issue>",
       "suggestion": "<replacement code only, or null>"
