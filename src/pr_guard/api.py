@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from pr_guard.tools import (
     _list_files_tree,
     _list_changed_files_between_branches,

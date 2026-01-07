@@ -42,16 +42,14 @@ async def generate_github_review_payload() -> Dict[str, Any]:
             # Wrap suggestion in ```suggestion ... ``` as GitHub expects
             body += f"\n\n```suggestion\n{comment['suggestion']}\n```"
 
-        c_entry = {
-            "path": comment["path"],
-            "side": comment.get("side", "RIGHT"),
-            "body": body,
-        }
-        if comment.get("line"):
-            c_entry["line"] = comment["line"]
-
-        formatted_comments.append(c_entry)
-
+        if comment.get("position") is not None:
+            formatted_comments.append(
+                {
+                    "path": comment["path"],
+                    "position": comment["position"],
+                    "body": body,
+                }
+            )
     github_review = {
         "event": review_dict["event"],
         "body": review_dict["body"],

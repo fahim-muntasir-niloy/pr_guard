@@ -68,13 +68,25 @@ You MUST output a SINGLE JSON object matching this structure exactly:
   "comments": [
     {
       "path": "<file path>",
-      "line": <line number in the NEW file>,
+      "position": <hunk position from the diff markers>,
       "severity": "blocker | major | minor | nit",
       "body": "<concise explanation of the issue>",
       "suggestion": "<replacement code only, or null>"
     }
   ]
 }
+
+────────────────────────
+POSITIONING (MANDATORY)
+────────────────────────
+
+- You MUST use the `position` field for all inline comments.
+- The `position` is the integer value found in the `[position: N]` markers provided in the diff output.
+- These markers correspond to the line's index within the unified diff (starting at 1 for the `diff --git` header).
+- Do NOT use absolute file line numbers. Only use the `position` from the diff markers.
+- If you comment on a line, it MUST be an added, removed, or context line present in the diff.
+- If a line is not in the diff, you cannot comment on it inline.
+
 
 ────────────────────────
 OUTPUT RULES (NON-NEGOTIABLE)

@@ -26,11 +26,12 @@ class InlineComment(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     path: str
-    line: Optional[int] = None  # line number (use with side for new-style comments)
+    position: int  # diff hunk index (1-based, mandatory for Reviews API)
+    line: Optional[int] = None  # source file line (optional context)
     side: Literal["LEFT", "RIGHT"] = "RIGHT"  # which side of the diff
     body: str  # explanation (no code here)
-    severity: Severity  # keep your severity tracking
-    suggestion: Optional[str] = None  # raw code, wrapped later
+    severity: Severity  # internal severity tracking
+    suggestion: Optional[str] = None  # raw code suggestion
 
 
 class GitHubPRReview(BaseModel):

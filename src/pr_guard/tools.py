@@ -198,9 +198,19 @@ async def get_list_of_changed_files() -> dict[str, list[str]]:
 async def get_diff_of_single_file(file_path: str) -> str:
     """
     Returns the diff of the latest commit (HEAD~1...HEAD) for a specific file.
-    Use this to review the very last change of a specific file on the current branch.
+    Each line of the diff (including headers) is prefixed with its absolute [position: N].
+    GitHub's Review API requires this 'position' for inline comments.
     """
-    return _run_git_command(["diff", "HEAD~1", "HEAD", "--", file_path])
+    diff = _run_git_command(["diff", "HEAD~1", "HEAD", "--", file_path])
+    if not diff:
+        return "No changes found for this file."
+
+    lines = diff.splitlines()
+    marked_lines = []
+    for i, line in enumerate(lines, 1):
+        marked_lines.append(f"[position: {i}] {line}")
+
+    return "\n".join(marked_lines)
 
 
 TOOLS = [
