@@ -46,7 +46,8 @@ async def read_file(path: str):
         )
     content = await _read_file_cat(file_path=abs_path)
     if content.startswith("Error:"):
-        raise HTTPException(status_code=400, detail=content)
+        # Avoid leaking full server path in error message
+        raise HTTPException(status_code=400, detail=f"Error reading path: {path}")
     return {"path": path, "content": content}
 
 
