@@ -72,7 +72,7 @@ async def run_review(plain: bool = False):
                             console.print(
                                 f"🔧 [bold dim]Calling tool:[/bold dim] [cyan]{tc['name']}[/cyan]"
                             )
-                            console.print(f"   [dim]Args: {args_json}[/dim]")
+                            console.print(f"   Input: {args_json}")
                         else:
                             print(f"Calling tool: {tc['name']} with {args_json}")
 
