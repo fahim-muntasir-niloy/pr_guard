@@ -298,6 +298,98 @@ def review(
     asyncio.run(run_review(plain=plain))
 
 
+async def run_review_and_post_to_github(plain: bool = False):
+    if not plain:
+        console.print(
+            Panel("[bold blue]PR Guard[/bold blue] - Initialized", expand=False)
+        )
+    try:
+        setup_env()
+
+        # Use a context manager for status if not in plain mode
+        status_manager = (
+            console.status("[bold green]Agent is working...", spinner="dots")
+            if not plain
+            else asyncio.Event()  # Dummy object for plain mode
+        )
+
+        async def _run():
+            agent = await init_agent()
+
+            res = await agent.ainvoke(
+                {
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": "Execute a pre-merge code review for the latest git commits.",
+                        }
+                    ]
+                }
+            )
+
+            # Extract the structured response
+            review_data = res["structured_response"]
+
+            # Map comments to include suggestions if present
+            formatted_comments = []
+            review_data = review_data.model_dump()
+            for comment in review_data.get("comments", []):
+                body = comment["body"]
+                if comment.get("suggestion"):
+                    # Wrap suggestion in ```suggestion ... ``` as GitHub expects
+                    body += f"\n\n```suggestion\n{comment['suggestion']}\n```"
+                if comment.get("line"):
+                    formatted_comments.append(
+                        {
+                            "path": comment["path"],
+                            "line": comment.get("line"),
+                            "side": comment.get("side", "RIGHT"),
+                            "body": body,
+                        }
+                    )
+                else:
+                    formatted_comments.append(
+                        {
+                            "path": comment["path"],
+                            "side": comment.get("side", "RIGHT"),
+                            "body": body,
+                        }
+                    )
+
+            github_review = {
+                "event": review_data["event"],
+                "body": review_data["body"],
+                "comments": formatted_comments,
+            }
+
+            print(json.dumps(github_review, indent=4))
+
+        if not plain:
+            with status_manager:
+                await _run()
+        else:
+            await _run()
+
+    except Exception as e:
+        if not plain:
+            console.print(f"\n[red]Error:[/red] {e}")
+        else:
+            print(f"Error: {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def review_and_post_to_github(
+    plain: bool = typer.Option(
+        False, "--plain", help="Output plain Markdown without styling."
+    ),
+):
+    """
+    Post review to GitHub.
+    """
+    asyncio.run(run_review_and_post_to_github(plain=plain))
+
+
 @app.command()
 def tree(path: str = typer.Argument(".", help="Path to list")):
     """
