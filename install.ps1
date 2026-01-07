@@ -25,7 +25,7 @@ if (Test-Path $InstallDir) {
     git pull
 } else {
     Write-Host "📥 Cloning PR Guard into $InstallDir..." -ForegroundColor Yellow
-    git clone https://github.com/[ORG]/pr_guard.git $InstallDir
+    git clone https://github.com/fahim-muntasir-niloy/pr_guard.git $InstallDir
 }
 
 # 4. Install Dependencies
