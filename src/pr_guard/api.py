@@ -38,7 +38,13 @@ async def file_tree(path: str = "."):
 
 @app.get("/file/{path:path}")
 async def read_file(path: str):
-    content = await _read_file_cat(file_path=path)
+    base_dir = os.path.abspath(os.getcwd())
+    abs_path = os.path.abspath(os.path.join(base_dir, path))
+    if not (abs_path == base_dir or abs_path.startswith(base_dir + os.sep)):
+        raise HTTPException(
+            status_code=403, detail="Access outside repository is not allowed."
+        )
+    content = await _read_file_cat(file_path=abs_path)
     if content.startswith("Error:"):
         raise HTTPException(status_code=400, detail=content)
     return {"path": path, "content": content}

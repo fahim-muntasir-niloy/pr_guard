@@ -110,7 +110,7 @@ async def get_git_diff_between_branches(
 
 
 async def _get_git_log(limit: int = 5) -> str:
-    return _run_git_command(["log", f"-n {limit}", "--oneline", "--graph", "--all"])
+    return _run_git_command(["log", "-n", str(limit), "--oneline", "--graph", "--all"])
 
 
 @tool(args_schema=GitLogInput)
