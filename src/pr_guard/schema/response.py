@@ -27,7 +27,7 @@ class InlineComment(BaseModel):
 
     path: str
     position: int  # diff hunk index (1-based, mandatory for Reviews API)
-    line: Optional[int]  # source file line (optional context)
+    line: int  # source file line (optional context)
     side: Literal["LEFT", "RIGHT"] = "RIGHT"  # which side of the diff
     body: str  # explanation (no code here)
     severity: Severity  # internal severity tracking
