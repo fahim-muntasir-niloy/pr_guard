@@ -3,7 +3,7 @@ import os
 import json
 import sys
 from typing import Any, Dict
-from pr_guard.agent import init_agent
+from pr_guard.agent import init_review_agent
 from pr_guard.config import settings
 
 
@@ -18,7 +18,7 @@ async def generate_github_review_payload() -> Dict[str, Any]:
     """Runs the AI agent and formats the response for the GitHub Reviews API."""
     sys.stderr.write("Generating review payload...\n")
     setup_env()
-    agent = await init_agent()
+    agent = await init_review_agent()
     res = await agent.ainvoke(
         {
             "messages": [
