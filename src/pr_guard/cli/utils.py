@@ -240,6 +240,10 @@ async def chat_loop():
                 console.print("\n[bold blue]Bye! Keep on coding![/bold blue] 🚀")
                 break
 
+            if user_input.lower() == "review":
+                await run_review()
+                continue
+
             if user_input.lower() == "help":
                 show_cli_help()
                 continue
