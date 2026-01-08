@@ -2,11 +2,11 @@ import subprocess
 from typing import List
 
 
-def _run_git_command(command: List[str], cwd: str = ".") -> str:
-    """Helper to run git commands safely."""
+def _run_shell_command(command: List[str], cwd: str = ".") -> str:
+    """Helper to run shell commands safely."""
     try:
         result = subprocess.run(
-            ["git"] + command,
+            command,
             cwd=cwd,
             capture_output=True,
             text=True,
@@ -14,10 +14,15 @@ def _run_git_command(command: List[str], cwd: str = ".") -> str:
             check=False,
         )
         if result.returncode != 0:
-            return f"Error running git command: {result.stderr}"
+            return f"Error running command: {result.stderr}"
         return result.stdout
     except Exception as e:
         return f"Error: {str(e)}"
+
+
+def _run_git_command(command: List[str], cwd: str = ".") -> str:
+    """Helper to run git commands safely."""
+    return _run_shell_command(["git"] + command, cwd=cwd)
 
 
 def get_default_branch(cwd: str = ".") -> str:
