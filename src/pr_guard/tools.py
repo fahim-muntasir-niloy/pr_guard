@@ -1,7 +1,11 @@
 import os
 from typing import Optional
 from langchain.tools import tool
-from pr_guard.utils.git_utils import _run_git_command, get_default_branch
+from pr_guard.utils.git_utils import (
+    _run_git_command,
+    _run_shell_command,
+    get_default_branch,
+)
 from pr_guard.schema.tool_schema import (
     ListFilesInput,
     NoInput,
@@ -234,7 +238,7 @@ async def gh_pr_create(
     if draft:
         cmd.append("--draft")
 
-    return _run_git_command(cmd)
+    return _run_shell_command(cmd)
 
 
 @tool(args_schema=GHViewPRInput)
@@ -247,7 +251,7 @@ async def gh_pr_view(pr_number: Optional[int] = None) -> str:
     if pr_number:
         cmd.append(str(pr_number))
 
-    return _run_git_command(cmd)
+    return _run_shell_command(cmd)
 
 
 TOOLS = [
