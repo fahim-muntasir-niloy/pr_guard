@@ -10,6 +10,8 @@ from pr_guard.schema.tool_schema import (
     GitLogInput,
     SearchCodeInput,
     ListChangedFilesInput,
+    GHCreatePRInput,
+    GHViewPRInput,
 )
 
 
@@ -213,6 +215,41 @@ async def get_diff_of_single_file(file_path: str) -> str:
     return "\n".join(marked_lines)
 
 
+@tool(args_schema=GHCreatePRInput)
+async def gh_pr_create(
+    title: str,
+    body: str,
+    base: Optional[str] = None,
+    head: Optional[str] = None,
+    draft: bool = False,
+) -> str:
+    """
+    Creates a GitHub Pull Request using the 'gh' CLI.
+    """
+    cmd = ["gh", "pr", "create", "--title", title, "--body", body]
+    if base:
+        cmd.extend(["--base", base])
+    if head:
+        cmd.extend(["--head", head])
+    if draft:
+        cmd.append("--draft")
+
+    return _run_git_command(cmd)
+
+
+@tool(args_schema=GHViewPRInput)
+async def gh_pr_view(pr_number: Optional[int] = None) -> str:
+    """
+    Views a GitHub Pull Request using the 'gh' CLI.
+    If pr_number is not provided, it views the PR for the current branch.
+    """
+    cmd = ["gh", "pr", "view"]
+    if pr_number:
+        cmd.append(str(pr_number))
+
+    return _run_git_command(cmd)
+
+
 TOOLS = [
     get_list_of_changed_files,
     get_diff_of_single_file,
@@ -223,4 +260,6 @@ TOOLS = [
     get_git_log,
     search_code_grep,
     list_changed_files_between_branches,
+    gh_pr_create,
+    gh_pr_view,
 ]
