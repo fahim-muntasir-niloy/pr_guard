@@ -6,18 +6,6 @@ ReviewEvent = Literal["APPROVE", "REQUEST_CHANGES", "COMMENT"]
 Severity = Literal["blocker", "major", "minor", "nit"]
 
 
-class SuggestedChange(BaseModel):
-    """
-    A single suggested code change that GitHub can apply.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    path: str  # file path relative to repo root
-    line: int  # line number in the NEW file (RIGHT side)
-    suggestion: str  # replacement code only (no diff markers)
-
-
 class InlineComment(BaseModel):
     """
     Inline PR review comment for GitHub's Reviews API.
@@ -27,7 +15,6 @@ class InlineComment(BaseModel):
 
     path: str
     position: int  # diff hunk index (1-based, mandatory for Reviews API)
-    line: Optional[int] = None  # line number (use with side for new-style comments)
     side: Literal["LEFT", "RIGHT"] = "RIGHT"  # which side of the diff
     body: str  # explanation (no code here)
     severity: Severity  # internal severity tracking

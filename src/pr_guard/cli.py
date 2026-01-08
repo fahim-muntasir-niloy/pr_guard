@@ -131,7 +131,7 @@ async def run_review(plain: bool = False):
             else "dim"
         )
 
-        info = f"[bold cyan]{comment['path']}[/bold cyan] : [bold white]Line {comment.get('line', '?')}[/bold white]"
+        info = f"[bold cyan]{comment['path']}[/bold cyan]"
         sev_badge = f"[{sev_color}]▐ {severity.upper()}[/{sev_color}]"
 
         console.print(
