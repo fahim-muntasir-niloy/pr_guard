@@ -16,7 +16,6 @@ def setup_env():
 
 async def generate_github_review_payload() -> Dict[str, Any]:
     """Runs the AI agent and formats the response for the GitHub Reviews API."""
-    sys.stderr.write("Generating review payload...\n")
     setup_env()
     agent = await init_review_agent()
     res = await agent.ainvoke(
@@ -47,8 +46,6 @@ async def generate_github_review_payload() -> Dict[str, Any]:
                 {
                     "path": comment["path"],
                     "position": comment["position"],
-                    "side": comment.get("side"),
-                    "severity": comment.get("severity"),
                     "body": body,
                 }
             )
