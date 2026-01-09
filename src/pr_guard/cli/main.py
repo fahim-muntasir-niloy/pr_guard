@@ -1,6 +1,5 @@
 import typer
 import asyncio
-import os
 
 from pr_guard.cli.utils import (
     run_review,
