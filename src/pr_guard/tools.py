@@ -5,6 +5,7 @@ from pr_guard.utils.git_utils import (
     _run_git_command,
     _run_shell_command,
     get_default_branch,
+    _split_command,
 )
 from pr_guard.schema.tool_schema import (
     ListFilesInput,
@@ -16,6 +17,7 @@ from pr_guard.schema.tool_schema import (
     ListChangedFilesInput,
     GHCreatePRInput,
     GHViewPRInput,
+    GHCommandInput,
 )
 
 
@@ -254,6 +256,18 @@ async def gh_pr_view(pr_number: Optional[int] = None) -> str:
     return _run_shell_command(cmd)
 
 
+@tool(args_schema=GHCommandInput)
+async def execute_github_command(command: str) -> str:
+    """
+    Executes a GitHub CLI command.
+    commands will start with gh
+    """
+    cmd = _split_command(command)
+    if not cmd or cmd[0] != "gh":
+        return "Error: only 'gh' commands are allowed"
+    return _run_shell_command(cmd)
+
+
 TOOLS = [
     get_list_of_changed_files,
     get_diff_of_single_file,
@@ -266,4 +280,5 @@ TOOLS = [
     list_changed_files_between_branches,
     gh_pr_create,
     gh_pr_view,
+    execute_github_command,
 ]

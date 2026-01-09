@@ -82,3 +82,10 @@ class GHViewPRInput(BaseModel):
     pr_number: Optional[int] = Field(
         description="The PR number to view. If not provided, views the current branch's PR."
     )
+
+
+class GHCommandInput(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid", json_schema_extra={"additionalProperties": False}
+    )
+    command: str = Field(description="The GitHub CLI command to execute")

@@ -52,10 +52,7 @@ Setting up CodeRabbit usually involves installing a GitHub/GitLab application an
 
 ### PR Guard
 PR Guard prioritizes **speed of adoption**:
-- **One-Liner Install**: 
-  ```powershell
-  iex (iwr -useb https://raw.githubusercontent.com/fahim-muntasir-niloy/pr_guard/main/install.ps1).Content
-  ```
+- **One-Liner Install**
 - **Minimal Setup**: Just add your API key to a `.env` file and run `pr-guard review`.
 - **Developer Experience**: Uses the `rich` library to provide beautiful, interactive terminal output that fits perfectly into a developer's existing workflow.
 
