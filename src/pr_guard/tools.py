@@ -254,6 +254,15 @@ async def gh_pr_view(pr_number: Optional[int] = None) -> str:
     return _run_shell_command(cmd)
 
 
+@tool(args_schema=GHCommandInput)
+async def execute_github_command(command: str) -> str:
+    """
+    Executes a GitHub CLI command.
+    commands will start with gh
+    """
+    return _run_shell_command(command)
+
+
 TOOLS = [
     get_list_of_changed_files,
     get_diff_of_single_file,
@@ -266,4 +275,5 @@ TOOLS = [
     list_changed_files_between_branches,
     gh_pr_create,
     gh_pr_view,
+    execute_github_command,
 ]
