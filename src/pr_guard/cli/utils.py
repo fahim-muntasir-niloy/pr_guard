@@ -12,15 +12,17 @@ from pr_guard.agent import init_review_agent, chat_agent
 from pr_guard.config import settings
 import uuid
 from langchain.messages import AIMessageChunk
+from pr_guard.utils.github_utils import post_github_review, build_github_review_payload
 
 console = Console()
 
 
 def setup_env():
-    os.environ["LANGSMITH_TRACING"] = "true"
-    os.environ["LANGSMITH_ENDPOINT"] = "https://api.smith.langchain.com"
-    os.environ["LANGSMITH_API_KEY"] = settings.LANGSMITH_API_KEY
-    os.environ["LANGSMITH_PROJECT"] = "pr-agent"
+    if settings.LANGSMITH_API_KEY:
+        os.environ["LANGSMITH_TRACING"] = "true"
+        os.environ["LANGSMITH_ENDPOINT"] = "https://api.smith.langchain.com"
+        os.environ["LANGSMITH_API_KEY"] = settings.LANGSMITH_API_KEY
+        os.environ["LANGSMITH_PROJECT"] = "pr-agent"
 
 
 def token_processor(token) -> str:
@@ -55,7 +57,7 @@ def token_processor(token) -> str:
     return ""
 
 
-async def run_review(plain: bool = False):
+async def run_review(plain: bool = False, github: bool = False):
     console.print("\n")
     console.print(
         "[bold blue]🛡️ PR Guard[/bold blue] - [dim]Advanced AI Code Reviewer[/dim]"
@@ -105,8 +107,33 @@ async def run_review(plain: bool = False):
     if not final_structured_res:
         return
 
-    # --- BEUTIFUL RICH REPORT ---
+    # --- REPORT DATA ---
     review_dict = final_structured_res.model_dump()
+
+    # --- GITHUB POSTING ---
+    if github:
+        repo = os.getenv("GITHUB_REPOSITORY")
+        pr_number = os.getenv("GITHUB_PR_NUMBER")
+        token = os.getenv("GITHUB_TOKEN")
+
+        if not all([repo, pr_number, token]):
+            console.print(
+                "[red]Error: GITHUB_REPOSITORY, GITHUB_PR_NUMBER, and GITHUB_TOKEN must be set for --github mode.[/red]"
+            )
+            return
+
+        review_payload, file_comments = build_github_review_payload(review_dict)
+        await post_github_review(
+            repo=repo,
+            pr_number=int(pr_number),
+            token=token,
+            review_payload=review_payload,
+            file_comments=file_comments,
+        )
+        console.print("[bold green]✅ Review posted to GitHub![/bold green]")
+        return
+
+    # --- BEUTIFUL RICH REPORT ---
 
     if plain:
         print(json.dumps(review_dict, indent=4))
@@ -191,6 +218,7 @@ def show_cli_help():
     table.add_column("Description", style="white")
 
     commands = [
+        ("init", "Initialize GitHub Actions for automated PR review."),
         ("review", "Review current git changes with AI analysis."),
         ("chat", "Interactive assistant (default mode)."),
         ("tree", "Visualize project directory structure."),

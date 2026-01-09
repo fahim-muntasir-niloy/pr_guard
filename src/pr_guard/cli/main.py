@@ -59,15 +59,90 @@ def main(
 
 
 @app.command()
+def init():
+    """
+    🚀 [bold green]Initialize[/bold green] GitHub Actions for automated PR review.
+    """
+    import os
+
+    workflow_path = ".github/workflows/pr_review.yml"
+    os.makedirs(os.path.dirname(workflow_path), exist_ok=True)
+
+    workflow_content = """name: PR Review Guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - master
+      - main
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install PR Guard
+        run: pip install pr-guard
+
+      - name: Run PR Guard Review
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }} # Optional
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: pr-guard review --github
+"""
+
+    if os.path.exists(workflow_path):
+        console.print(
+            f"[yellow]Workflow file already exists at {workflow_path}[/yellow]"
+        )
+        overwrite = typer.confirm("Do you want to overwrite it?")
+        if not overwrite:
+            console.print("[red]Aborted.[/red]")
+            return
+
+    with open(workflow_path, "w") as f:
+        f.write(workflow_content)
+
+    console.print(f"[bold green]✅ Successfully created {workflow_path}[/bold green]")
+    console.print("\n[bold]Next steps:[/bold]")
+    console.print("1. Push this file to your repository.")
+    console.print(
+        "2. Ensure [bold]OPENAI_API_KEY[/bold] is added to your GitHub Secrets."
+    )
+    console.print("3. PR Guard will now automatically review your PRs!")
+
+
+@app.command()
 def review(
     plain: bool = typer.Option(
         False, "--plain", help="Output plain Markdown without styling."
+    ),
+    github: bool = typer.Option(
+        False, "--github", help="Post review comments to GitHub PR."
     ),
 ):
     """
     🤖 [bold green]Review[/bold green] the current git changes.
     """
-    asyncio.run(run_review(plain=plain))
+    asyncio.run(run_review(plain=plain, github=github))
 
 
 @app.command()
