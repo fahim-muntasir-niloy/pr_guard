@@ -18,10 +18,11 @@ console = Console()
 
 
 def setup_env():
-    os.environ["LANGSMITH_TRACING"] = "true"
-    os.environ["LANGSMITH_ENDPOINT"] = "https://api.smith.langchain.com"
-    os.environ["LANGSMITH_API_KEY"] = settings.LANGSMITH_API_KEY
-    os.environ["LANGSMITH_PROJECT"] = "pr-agent"
+    if settings.LANGSMITH_API_KEY:
+        os.environ["LANGSMITH_TRACING"] = "true"
+        os.environ["LANGSMITH_ENDPOINT"] = "https://api.smith.langchain.com"
+        os.environ["LANGSMITH_API_KEY"] = settings.LANGSMITH_API_KEY
+        os.environ["LANGSMITH_PROJECT"] = "pr-agent"
 
 
 def token_processor(token) -> str:

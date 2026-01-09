@@ -38,8 +38,13 @@ async def post_github_review(
         if file_comments:
             print(f" Posting {len(file_comments)} file-level comments...")
             for comment in file_comments:
+                comment_body = (
+                    f"**File: {comment.get('path')}**\n\n{comment.get('body')}"
+                )
                 res = await client.post(
-                    f"{base_url}/comments", headers=headers, json=comment
+                    f"https://api.github.com/repos/{repo}/issues/{pr_number}/comments",
+                    headers=headers,
+                    json={"body": comment_body},
                 )
                 if res.status_code not in (200, 201):
                     print(
