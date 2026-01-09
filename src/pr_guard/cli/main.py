@@ -1,9 +1,16 @@
-from rich.console import Console
+import typer
+import asyncio
 from rich.panel import Panel
 from rich.table import Table
 from rich.syntax import Syntax
-from pr_guard.agent import init_agent
-from pr_guard.config import settings
+import os
+
+from pr_guard.cli.utils import (
+    run_review,
+    chat_loop,
+    check_gh_cli,
+    console,
+)
 from pr_guard.tools import (
     _list_files_tree,
     _get_git_diff_between_branches,
@@ -11,10 +18,7 @@ from pr_guard.tools import (
     _list_changed_files_between_branches,
     _read_file_cat,
 )
-import os
-import json
-import asyncio
-import typer
+from pr_guard.config import settings
 
 app = typer.Typer(
     name="pr-guard",
@@ -22,137 +26,36 @@ app = typer.Typer(
     add_completion=False,
     rich_markup_mode="rich",
 )
-console = Console()
 
 
-def setup_env():
-    os.environ["LANGSMITH_TRACING"] = "true"
-    os.environ["LANGSMITH_ENDPOINT"] = "https://api.smith.langchain.com"
-    os.environ["LANGSMITH_API_KEY"] = settings.LANGSMITH_API_KEY
-    os.environ["LANGSMITH_PROJECT"] = "pr-agent"
+@app.callback(invoke_without_command=True)
+def main(
+    ctx: typer.Context,
+    version: bool = typer.Option(
+        False, "--version", "-v", help="Show version and exit"
+    ),
+):
+    """
+    🛡️  AI-powered Pull Request Reviewer and Guard.
+    """
+    if version:
+        import importlib.metadata
 
+        try:
+            ver = importlib.metadata.version("pr-guard")
+            console.print(f"PR Guard version: [bold cyan]{ver}[/bold cyan]")
+        except importlib.metadata.PackageNotFoundError:
+            console.print("PR Guard version: [bold cyan]0.2.1[/bold cyan] (local)")
+        raise typer.Exit()
 
-# streaming response in CLI
-async def run_review(plain: bool = False):
-    console.print("\n")
-    console.print(
-        "[bold blue]🛡️ PR Guard[/bold blue] - [dim]Advanced AI Code Reviewer[/dim]"
-    )
-    console.print("\n")
-    setup_env()
-
-    agent = await init_agent()
-
-    # Track the result for the final report
-    final_structured_res = None
-
-    # Use modern astream with "updates" mode
-    async for chunk in agent.astream(
-        {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": "Execute a full code review for the latest git commits. Call the tools needed to understand the scope and diff.",
-                }
-            ]
-        },
-        stream_mode="updates",
-    ):
-        for node_name, update in chunk.items():
-            # 1. Stream the "Steps" (Detect tool calls in the message history)
-            if "messages" in update:
-                last_msg = update["messages"][-1]
-                # Check for tool calls in the message
-                if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
-                    for tc in last_msg.tool_calls:
-                        # Format the arguments as a clean string
-                        args_json = json.dumps(tc["args"])
-
-                        if not plain:
-                            console.print(
-                                f"🔧 [bold dim]Calling tool:[/bold dim] [cyan]{tc['name']}[/cyan]"
-                            )
-                            console.print(f"[dim]   Input: {args_json}[/dim]")
-                        else:
-                            print(f"Calling tool: {tc['name']} with {args_json}")
-
-            # 2. Capture the structured response if this node provides it
-            if "structured_response" in update:
-                final_structured_res = update["structured_response"]
-
-    if not final_structured_res:
-        return
-
-    # --- BEUTIFUL RICH REPORT (Your existing logic) ---
-    review_dict = final_structured_res.model_dump()
-
-    if plain:
-        print(json.dumps(review_dict, indent=4))
-        return
-
-    event = review_dict.get("event", "COMMENT")
-    event_color = (
-        "green"
-        if event == "APPROVE"
-        else "red"
-        if event == "REQUEST_CHANGES"
-        else "yellow"
-    )
-
-    console.print("\n")
-    console.print(
-        Panel(
-            f"[bold {event_color}]{event}[/bold {event_color}]\n\n{review_dict.get('body', '')}",
-            title="🏁 Review Result",
-            border_style=event_color,
-            padding=(1, 2),
-        )
-    )
-
-    if not review_dict.get("comments"):
-        console.print(
-            "\n✨ [bold green]No issues found! Your code looks great.[/bold green]"
-        )
-        return
-
-    console.print(
-        f"\n[bold]🔍 Found {len(review_dict['comments'])} items to address:[/bold]\n"
-    )
-
-    for comment in review_dict["comments"]:
-        severity = comment.get("severity", "nit").lower()
-        sev_color = (
-            "red"
-            if severity == "blocker"
-            else "orange3"
-            if severity == "major"
-            else "yellow"
-            if severity == "minor"
-            else "dim"
-        )
-
-        info = f"[bold cyan]{comment['path']}[/bold cyan] : [bold white]Line {comment.get('line', '?')}[/bold white]"
-        sev_badge = f"[{sev_color}]▐ {severity.upper()}[/{sev_color}]"
-
-        console.print(
-            Panel(
-                f"{comment['body']}",
-                title=f"{sev_badge} {info}",
-                title_align="left",
-                border_style=sev_color,
-                padding=(0, 1),
+    if ctx.invoked_subcommand is None:
+        # Default to chat
+        if check_gh_cli():
+            asyncio.run(chat_loop())
+        else:
+            console.print(
+                "[red]GitHub CLI integration is required for chat. Please resolve the issues above.[/red]"
             )
-        )
-
-        if comment.get("suggestion"):
-            syntax = Syntax(
-                comment["suggestion"],
-                os.path.splitext(comment["path"])[1].lstrip(".") or "python",
-                theme="monokai",
-                line_numbers=True,
-            )
-            console.print(Panel(syntax, title="💡 Suggested Fix", border_style="green"))
-        console.print("")
 
 
 @app.command()
@@ -165,6 +68,19 @@ def review(
     🤖 [bold green]Review[/bold green] the current git changes.
     """
     asyncio.run(run_review(plain=plain))
+
+
+@app.command()
+def chat():
+    """
+    💬 [bold cyan]Chat[/bold cyan] interactively with PR Guard.
+    """
+    if check_gh_cli():
+        asyncio.run(chat_loop())
+    else:
+        console.print(
+            "[red]GitHub CLI integration is required for chat. Please resolve the issues above.[/red]"
+        )
 
 
 @app.command()

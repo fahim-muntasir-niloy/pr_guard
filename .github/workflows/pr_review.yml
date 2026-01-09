@@ -2,12 +2,14 @@ name: PR Review Guard
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened]
     branches:
       - master
 
 jobs:
   review:
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
       pull-requests: write
@@ -16,7 +18,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Full history needed for git tools
+          fetch-depth: 0   # required for correct diffs
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -26,25 +28,52 @@ jobs:
       - name: Set up Python
         run: uv python install
 
-      - name: Run PR Review (generate review JSON)
-        id: review
+      - name: Generate PR review payload
+        id: generate
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
         run: |
-          PYTHONPATH=src uv run src/pr_guard/logic/review_generator.py > review.json
+          set -e
+          PYTHONPATH=src uv run src/pr_guard/logic/review_generator.py > review_payload.json
+          echo "Review payload generated:"
+          jq . review_payload.json
 
-      - name: Post PR Review with suggestions
+      - name: Post PR review (summary + inline comments)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_URL: ${{ github.event.pull_request.url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
-          # Strip fields incompatible with the Reviews API to avoid 422 errors
-          cat review.json | jq 'del(.comments[].line, .comments[].side, .comments[].severity)' > review_clean.json
-          
-          curl -s -X POST \
+          set -e
+
+          REVIEW_BODY=$(jq '.review' review_payload.json)
+
+          echo "Posting PR review..."
+          curl -sS -X POST \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "Content-Type: application/json" \
-            "$PR_URL/reviews" \
-            -d @review_clean.json
+            "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/reviews" \
+            -d "$REVIEW_BODY"
+
+      - name: Post file-level PR comments (fallback)
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+
+          COUNT=$(jq '.file_comments | length' review_payload.json)
+          echo "Posting $COUNT file-level comments..."
+
+          jq -c '.file_comments[]' review_payload.json | while read -r comment; do
+            curl -sS -X POST \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/comments" \
+              -d "$comment"
+          done

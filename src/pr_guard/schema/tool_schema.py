@@ -1,4 +1,4 @@
-from typing import List, Optional, Type
+from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -56,3 +56,29 @@ class ListChangedFilesInput(BaseModel):
         description="Base branch/commit. Defaults to main/master."
     )
     head: str = Field(description="Head branch/commit. Defaults to HEAD.")
+
+
+class GHCreatePRInput(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid", json_schema_extra={"additionalProperties": False}
+    )
+    title: str = Field(description="The title of the pull request")
+    body: str = Field(description="The body/description of the pull request")
+    base: Optional[str] = Field(
+        description="The branch into which you want your code merged. Defaults to master/main."
+    )
+    head: Optional[str] = Field(
+        description="The branch that contains your changes. Defaults to current branch."
+    )
+    draft: bool = Field(
+        default=False, description="Whether to create the PR as a draft"
+    )
+
+
+class GHViewPRInput(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid", json_schema_extra={"additionalProperties": False}
+    )
+    pr_number: Optional[int] = Field(
+        description="The PR number to view. If not provided, views the current branch's PR."
+    )

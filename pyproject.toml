@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.scripts]
-pr-guard = "pr_guard.cli:app"
+pr-guard = "pr_guard.cli.main:app"
 
 [build-system]
 requires = ["hatchling"]
