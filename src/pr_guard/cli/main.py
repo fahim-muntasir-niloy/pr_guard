@@ -1,8 +1,5 @@
 import typer
 import asyncio
-from rich.panel import Panel
-from rich.table import Table
-from rich.syntax import Syntax
 import os
 
 from pr_guard.cli.utils import (
@@ -10,15 +7,15 @@ from pr_guard.cli.utils import (
     chat_loop,
     check_gh_cli,
     console,
+    run_init,
+    run_tree,
+    run_changed,
+    run_diff,
+    run_log,
+    run_status,
+    run_cat,
+    run_version,
 )
-from pr_guard.tools import (
-    _list_files_tree,
-    _get_git_diff_between_branches,
-    _get_git_log,
-    _list_changed_files_between_branches,
-    _read_file_cat,
-)
-from pr_guard.config import settings
 
 app = typer.Typer(
     name="pr-guard",
@@ -39,13 +36,7 @@ def main(
     🛡️  AI-powered Pull Request Reviewer and Guard.
     """
     if version:
-        import importlib.metadata
-
-        try:
-            ver = importlib.metadata.version("pr-guard")
-            console.print(f"PR Guard version: [bold cyan]{ver}[/bold cyan]")
-        except importlib.metadata.PackageNotFoundError:
-            console.print("PR Guard version: [bold cyan]0.2.1[/bold cyan] (local)")
+        run_version()
         raise typer.Exit()
 
     if ctx.invoked_subcommand is None:
@@ -63,71 +54,7 @@ def init():
     """
     🚀 [bold green]Initialize[/bold green] GitHub Actions for automated PR review.
     """
-    import os
-
-    workflow_path = ".github/workflows/pr_review.yml"
-    os.makedirs(os.path.dirname(workflow_path), exist_ok=True)
-
-    workflow_content = """name: PR Review Guard
-
-on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches:
-      - master
-      - main
-
-jobs:
-  review:
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      pull-requests: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
-      - name: Install PR Guard
-        run: pip install pr-guard
-
-      - name: Run PR Guard Review
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }} # Optional
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: pr-guard review --github
-"""
-
-    if os.path.exists(workflow_path):
-        console.print(
-            f"[yellow]Workflow file already exists at {workflow_path}[/yellow]"
-        )
-        overwrite = typer.confirm("Do you want to overwrite it?")
-        if not overwrite:
-            console.print("[red]Aborted.[/red]")
-            return
-
-    with open(workflow_path, "w") as f:
-        f.write(workflow_content)
-
-    console.print(f"[bold green]✅ Successfully created {workflow_path}[/bold green]")
-    console.print("\n[bold]Next steps:[/bold]")
-    console.print("1. Push this file to your repository.")
-    console.print(
-        "2. Ensure [bold]OPENAI_API_KEY[/bold] is added to your GitHub Secrets."
-    )
-    console.print("3. PR Guard will now automatically review your PRs!")
+    asyncio.run(run_init())
 
 
 @app.command()
@@ -163,14 +90,7 @@ def tree(path: str = typer.Argument(".", help="Path to list")):
     """
     📁 [bold yellow]Tree[/bold yellow] view of the project structure.
     """
-
-    async def _run():
-        output = await _list_files_tree(path=path)
-        console.print(
-            Panel(output, title=f"📁 Project Tree: {path}", border_style="blue")
-        )
-
-    asyncio.run(_run())
+    asyncio.run(run_tree(path=path))
 
 
 @app.command()
@@ -181,20 +101,7 @@ def changed(
     """
     📝 [bold magenta]List[/bold magenta] files that have changed between refs.
     """
-
-    async def _run():
-        files = await _list_changed_files_between_branches(base=base, head=head)
-        if not files.strip():
-            console.print("[yellow]No files have changed.[/yellow]")
-            return
-
-        table = Table(title=f"📝 Changed Files: {base}...{head}", show_header=True)
-        table.add_column("File Path", style="green")
-        for file in files.splitlines():
-            table.add_row(file)
-        console.print(table)
-
-    asyncio.run(_run())
+    asyncio.run(run_changed(base=base, head=head))
 
 
 @app.command()
@@ -205,13 +112,7 @@ def diff(
     """
     Show the git diff between two branches.
     """
-
-    async def _run():
-        diff_content = await _get_git_diff_between_branches(base=base, head=head)
-        syntax = Syntax(diff_content, "diff", theme="monokai", line_numbers=True)
-        console.print(Panel(syntax, title=f"🔍 Diff: {base}...{head}", expand=True))
-
-    asyncio.run(_run())
+    asyncio.run(run_diff(base=base, head=head))
 
 
 @app.command()
@@ -221,12 +122,7 @@ def log(
     """
     Show the recent git commit log.
     """
-
-    async def _run():
-        log_content = await _get_git_log(limit=limit)
-        console.print(Panel(log_content, title="📜 Git Log", border_style="cyan"))
-
-    asyncio.run(_run())
+    asyncio.run(run_log(limit=limit))
 
 
 @app.command()
@@ -234,44 +130,7 @@ def status():
     """
     🛡️  [bold cyan]Status[/bold cyan] of the environment and repository.
     """
-    import subprocess
-
-    table = Table(
-        title="🛡️ PR Guard Status", show_header=True, header_style="bold magenta"
-    )
-    table.add_column("Component", style="cyan")
-    table.add_column("Value", style="white")
-
-    try:
-        branch = (
-            subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"])
-            .decode()
-            .strip()
-        )
-        last_commit = (
-            subprocess.check_output(["git", "log", "-1", "--format=%h %s"])
-            .decode()
-            .strip()
-        )
-        table.add_row("Git Branch", branch)
-        table.add_row("Last Commit", last_commit)
-    except Exception:
-        table.add_row("Git", "[red]Not a git repo or git not found[/red]")
-
-    table.add_row(
-        "OpenAI API Key",
-        "[green]Configured[/green]"
-        if settings.OPENAI_API_KEY
-        else "[red]Missing[/red]",
-    )
-    table.add_row(
-        "LangSmith Tracing",
-        "[green]Enabled[/green]"
-        if os.getenv("LANGSMITH_TRACING") == "true"
-        else "Disabled",
-    )
-
-    console.print(table)
+    run_status()
 
 
 @app.command()
@@ -279,18 +138,7 @@ def cat(path: str = typer.Argument(..., help="File path to read")):
     """
     Read and display a file with syntax highlighting.
     """
-
-    async def _run():
-        content = await _read_file_cat(file_path=path)
-        if content.startswith("Error:"):
-            console.print(f"[red]{content}[/red]")
-            return
-
-        ext = os.path.splitext(path)[1].lstrip(".") or "txt"
-        syntax = Syntax(content, ext, theme="monokai", line_numbers=True)
-        console.print(Panel(syntax, title=f"📄 {path}"))
-
-    asyncio.run(_run())
+    asyncio.run(run_cat(path=path))
 
 
 @app.command()
@@ -298,13 +146,7 @@ def version():
     """
     Show the version of PR Guard.
     """
-    import importlib.metadata
-
-    try:
-        ver = importlib.metadata.version("pr-guard")
-        console.print(f"PR Guard version: [bold cyan]{ver}[/bold cyan]")
-    except importlib.metadata.PackageNotFoundError:
-        console.print("PR Guard version: [bold cyan]0.2.1[/bold cyan] (local)")
+    run_version()
 
 
 if __name__ == "__main__":
