@@ -47,5 +47,5 @@ if (-not (Select-String -Path $ProfilePath -Pattern "function pr-guard")) {
     Write-Host "✅ Added 'pr-guard' command to your PowerShell profile." -ForegroundColor Green
 }
 
-Write-Host "`n🎉 PR Guard is ready! Restart your terminal and run 'pr-guard review'." -ForegroundColor Green
+Write-Host "`n🎉 PR Guard is ready! Restart your terminal and run 'pr-guard'." -ForegroundColor Green
 Write-Host "Don't forget to set your .env file in $InstallDir" -ForegroundColor Cyan
