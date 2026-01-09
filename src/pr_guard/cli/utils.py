@@ -277,13 +277,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: '3.13'
-
-      - name: Install PR Guard
-        run: curl -fsSL https://raw.githubusercontent.com/fahim-muntasir-niloy/pr_guard/master/install.sh | bash
 
       - name: Run PR Guard Review
         env:
@@ -292,7 +289,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: pr-guard review --github
+        run: uvx --from git+https://github.com/fahim-muntasir-niloy/pr_guard.git pr-guard review --github
 """
 
     if os.path.exists(workflow_path):
