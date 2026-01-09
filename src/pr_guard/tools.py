@@ -263,14 +263,12 @@ async def execute_github_command(command: str) -> str:
     commands will start with gh
     """
     cmd = _split_command(command)
+    if not cmd or cmd[0] != "gh":
+        return "Error: only 'gh' commands are allowed"
     return _run_shell_command(cmd)
 
 
 TOOLS = [
-    cmd = _split_command(command)
-    if not cmd or cmd[0] != "gh":
-        return "Error: only 'gh' commands are allowed"
-    return _run_shell_command(cmd)
     get_diff_of_single_file,
     list_files_tree,
     read_file_cat,
