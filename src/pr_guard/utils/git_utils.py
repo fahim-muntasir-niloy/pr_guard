@@ -1,5 +1,6 @@
 import subprocess
 from typing import List
+import shlex
 
 
 def _run_shell_command(command: List[str], cwd: str = ".") -> str:
@@ -33,3 +34,8 @@ def get_default_branch(cwd: str = ".") -> str:
         if "Error" not in out:
             return branch
     return "master"  # Fallback
+
+
+def _split_command(command):
+    args = shlex.split(command, posix=False)
+    return args

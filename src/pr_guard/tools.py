@@ -5,6 +5,7 @@ from pr_guard.utils.git_utils import (
     _run_git_command,
     _run_shell_command,
     get_default_branch,
+    _split_command,
 )
 from pr_guard.schema.tool_schema import (
     ListFilesInput,
@@ -261,7 +262,8 @@ async def execute_github_command(command: str) -> str:
     Executes a GitHub CLI command.
     commands will start with gh
     """
-    return _run_shell_command(command)
+    cmd = _split_command(command)
+    return _run_shell_command(cmd)
 
 
 TOOLS = [
