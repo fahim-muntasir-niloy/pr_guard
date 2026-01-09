@@ -69,32 +69,11 @@ pr-guard --help
 ```
 
 ### GitHub Action
-Add PR Guard to your repository workflows:
-```yaml
-name: PR Review
-on: [pull_request]
-
-jobs:
-  review:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: PR Guard Review
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_URL: ${{ github.event.pull_request.url }}
-        run: |
-          uv sync
-          PYTHONPATH=src uv run src/pr_guard/logic/review_generator.py > review.json
-          curl -s -X POST \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "Content-Type: application/json" \
-            "$PR_URL/reviews" \
-            -d @review.json
+The easiest way to set up automated reviews is with the `init` command:
+```bash
+pr-guard init
 ```
+This will create a `.github/workflows/pr_review.yml` file for you. PR Guard will then automatically review every pull request.
 
 ---
 
