@@ -36,6 +36,6 @@ def get_default_branch(cwd: str = ".") -> str:
     return "master"  # Fallback
 
 
-def _split_command(command):
-    args = shlex.split(command, posix=False)
+def _split_command(command: str) -> List[str]:
+    args = shlex.split(command)
     return args
