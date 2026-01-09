@@ -269,6 +269,7 @@ async def execute_github_command(command: str) -> str:
 
 
 TOOLS = [
+    get_list_of_changed_files,
     get_diff_of_single_file,
     list_files_tree,
     read_file_cat,
