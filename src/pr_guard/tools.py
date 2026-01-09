@@ -16,6 +16,7 @@ from pr_guard.schema.tool_schema import (
     ListChangedFilesInput,
     GHCreatePRInput,
     GHViewPRInput,
+    GHCommandInput,
 )
 
 
