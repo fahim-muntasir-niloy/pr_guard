@@ -21,6 +21,32 @@ from pr_guard.schema.tool_schema import (
 )
 
 
+def _get_review_range() -> tuple[str, str]:
+    """
+    Determines the git range to use for reviews.
+    In CI, it uses GITHUB_BASE_REF and GITHUB_HEAD_REF.
+    Locally, it defaults to master...HEAD or HEAD~1...HEAD.
+    """
+    base = os.getenv("GITHUB_BASE_REF")
+    head = os.getenv("GITHUB_HEAD_REF") or "HEAD"
+
+    if base:
+        # In GitHub Actions, we typically need to reference the origin
+        # unless it's explicitly checked out.
+        return f"origin/{base}", head
+
+    # Check if we are on a branch and master/main exists
+    default = get_default_branch()
+    current = _run_git_command(["rev-parse", "--abbrev-ref", "HEAD"]).strip()
+
+    if current != default and "Error" not in current:
+        return f"origin/{default}" if "Error" not in _run_git_command(
+            ["rev-parse", "--verify", default]
+        ) else default, head
+
+    return "HEAD~1", "HEAD"
+
+
 async def _list_files_tree(path: str = ".", max_depth: int = 3) -> str:
     output = []
     ignored = {".git", "__pycache__", "node_modules", ".venv", "venv"}
@@ -184,32 +210,36 @@ async def list_changed_files_between_branches(
 @tool(args_schema=NoInput)
 async def get_last_commit_info() -> str:
     """
-    Returns the changed files and the diff of the latest commit (HEAD~1...HEAD).
-    Use this to review the very last change on the current branch.
+    Returns the changed files and the diff of the current PR or last commit.
+    Use this to review the recent changes.
     """
-    files = _run_git_command(["diff", "--name-only", "HEAD~1", "HEAD"])
-    diff = _run_git_command(["diff", "HEAD~1", "HEAD"])
-    return f"Changed Files in latest commit:\n{files}\n\nDiff of latest commit:\n{diff}"
+    base, head = _get_review_range()
+    files = _run_git_command(["diff", "--name-only", f"{base}...{head}"])
+    diff = _run_git_command(["diff", f"{base}...{head}"])
+    return f"Changed Files:\n{files}\n\nDiff:\n{diff}"
 
 
 @tool(args_schema=NoInput)
 async def get_list_of_changed_files() -> dict[str, list[str]]:
     """
-    Returns the changed files list of the latest commit (HEAD~1...HEAD).
-    Use this to review the changed files of the current branch.
+    Returns the list of files changed in the current PR or since the last commit.
+    Use this to identify which files need review.
     """
-    files = _run_git_command(["diff", "--name-only", "HEAD~1", "HEAD"])
+    base, head = _get_review_range()
+    files = _run_git_command(["diff", "--name-only", f"{base}...{head}"])
     return {"files": files.splitlines()}
 
 
 @tool(args_schema=ReadFileInput)
 async def get_diff_of_single_file(file_path: str) -> str:
     """
-    Returns the diff of the latest commit (HEAD~1...HEAD) for a specific file.
-    Each line of the diff (including headers) is prefixed with its absolute [position: N].
-    GitHub's Review API requires this 'position' for inline comments.
+    Returns the unified diff for a specific file in the current PR range.
+    Each line of the diff (including metadata and headers) is prefixed with its
+    1-indexed [position: N] marker. GitHub's Reviews API requires this position.
     """
-    diff = _run_git_command(["diff", "HEAD~1", "HEAD", "--", file_path])
+    base, head = _get_review_range()
+    # Use unified diff to match GitHub's expectations
+    diff = _run_git_command(["diff", f"{base}...{head}", "--", file_path])
     if not diff:
         return "[position: 1] No changes found for this file."
 
