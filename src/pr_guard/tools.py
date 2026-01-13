@@ -220,14 +220,13 @@ async def get_last_commit_info() -> str:
 
 
 @tool(args_schema=NoInput)
-async def get_list_of_changed_files() -> dict[str, list[str]]:
+async def get_list_of_changed_files() -> str:
     """
     Returns the list of files changed in the current PR or since the last commit.
     Use this to identify which files need review.
     """
     base, head = _get_review_range()
-    files = _run_git_command(["diff", "--name-only", f"{base}...{head}"])
-    return {"files": files.splitlines()}
+    return _run_git_command(["diff", "--name-only", f"{base}...{head}"])
 
 
 @tool(args_schema=ReadFileInput)
@@ -251,6 +250,87 @@ async def get_diff_of_single_file(file_path: str) -> str:
     return "\n".join(marked_lines)
 
 
+@tool(args_schema=NoInput)
+async def build_code() -> str:
+    """
+    Automatically detects the project type and attempts to build the code.
+    Returns the build output or error message if the build fails.
+    Use this to verify if the changes break the build.
+    """
+    import glob
+
+    build_results = []
+
+    # Node.js
+    if os.path.exists("package.json"):
+        build_results.append("📦 Detected Node.js project")
+        # Try npm install first
+        install_res = _run_shell_command(["npm", "install"])
+        if "Error" in install_res:
+            return f"❌ npm install failed:\n{install_res}"
+
+        # Then npm run build (if-present equivalent: check scripts)
+        try:
+            with open("package.json", "r") as f:
+                import json
+
+                pkg = json.load(f)
+                if "scripts" in pkg and "build" in pkg["scripts"]:
+                    build_res = _run_shell_command(["npm", "run", "build"])
+                    if "Error" in build_res:
+                        return f"❌ npm build failed:\n{build_res}"
+                    build_results.append(build_res)
+                else:
+                    build_results.append(
+                        "No build script found in package.json, skipping build step."
+                    )
+        except Exception as e:
+            return f"Error reading package.json: {e}"
+
+    # Go
+    elif os.path.exists("go.mod"):
+        build_results.append("🐹 Detected Go project")
+        res = _run_shell_command(["go", "build", "./..."])
+        if "Error" in res:
+            return f"❌ Go build failed:\n{res}"
+        build_results.append(res)
+
+    # Rust
+    elif os.path.exists("Cargo.toml"):
+        build_results.append("🦀 Detected Rust project")
+        res = _run_shell_command(["cargo", "build"])
+        if "Error" in res:
+            return f"❌ Cargo build failed:\n{res}"
+        build_results.append(res)
+
+    # Python
+    elif any(
+        os.path.exists(f) for f in ["pyproject.toml", "requirements.txt", "setup.py"]
+    ):
+        build_results.append("🐍 Detected Python project")
+        # Prefer uv if available, otherwise just mention sync
+        res = _run_shell_command(["uv", "sync"])
+        if "Error" in res:
+            # Fallback to a warning as uv might not be installed everywhere
+            build_results.append(f"⚠️ uv sync failed (is uv installed?): {res}")
+        else:
+            build_results.append(res)
+
+    # .NET
+    elif glob.glob("*.sln") or glob.glob("*.csproj"):
+        build_results.append("🎯 Detected .NET project")
+        res = _run_shell_command(["dotnet", "build"])
+        if "Error" in res:
+            return f"❌ .NET build failed:\n{res}"
+        build_results.append(res)
+
+    else:
+        return "❓ No supported build environment detected (package.json, go.mod, Cargo.toml, pyproject.toml, .sln, etc.)"
+
+    final_report = "\n".join(filter(None, build_results))
+    return f"✅ Build Verification Successful:\n{final_report}"
+
+
 @tool(args_schema=GHCreatePRInput)
 async def gh_pr_create(
     title: str,
@@ -261,6 +341,8 @@ async def gh_pr_create(
 ) -> str:
     """
     Creates a GitHub Pull Request using the 'gh' CLI.
+    Always ask for the branch names of base and head,
+    if not clearly provided.
     """
     cmd = ["gh", "pr", "create", "--title", title, "--body", body]
     if base:
@@ -301,6 +383,7 @@ async def execute_github_command(command: str) -> str:
 TOOLS = [
     get_list_of_changed_files,
     get_diff_of_single_file,
+    build_code,
     list_files_tree,
     read_file_cat,
     list_git_branches,
