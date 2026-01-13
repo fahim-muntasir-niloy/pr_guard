@@ -1,0 +1,77 @@
+{
+  "name": "pr-guard-extension",
+  "displayName": "PR Guard",
+  "description": "VS Code extension for PR Guard CLI",
+  "version": "0.0.1",
+  "publisher": "pr-guard",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "pr-guard-sidebar",
+          "title": "PR Guard",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "pr-guard-sidebar": [
+        {
+          "type": "webview",
+          "id": "pr-guard.sidebarView",
+          "name": "PR Guard"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "pr-guard.review",
+        "title": "PR Guard: Review"
+      },
+      {
+        "command": "pr-guard.chat",
+        "title": "PR Guard: Chat"
+      },
+      {
+        "command": "pr-guard.status",
+        "title": "PR Guard: Status"
+      },
+      {
+        "command": "pr-guard.init",
+        "title": "PR Guard: Init"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "PR Guard",
+      "properties": {
+        "prGuard.executablePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the pr-guard executable (optional override)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^18.x",
+    "@types/markdown-it": "^14.0.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "markdown-it": "^14.0.0"
+  }
+}
