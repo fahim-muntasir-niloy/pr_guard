@@ -16,7 +16,12 @@
       "activitybar": [
         {
           "id": "pr-guard-sidebar",
-          "title": "PR Guard",
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onView:pr-guard.sidebarView",
+    "onCommand:pr-guard.review",
+    "onCommand:pr-guard.status"
+  ],
           "icon": "resources/icon.svg"
         }
       ]
