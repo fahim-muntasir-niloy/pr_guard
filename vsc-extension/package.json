@@ -42,10 +42,6 @@
       {
         "command": "pr-guard.status",
         "title": "PR Guard: Status"
-      },
-      {
-        "command": "pr-guard.init",
-        "title": "PR Guard: Init"
       }
     ],
     "configuration": {

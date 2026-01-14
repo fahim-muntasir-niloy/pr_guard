@@ -2,13 +2,18 @@ import * as vscode from 'vscode';
 import * as cp from 'child_process';
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
-    _view?: vscode.WebviewView;
-    private _chatProcess?: cp.ChildProcess;
+    private _view?: vscode.WebviewView;
+    private _serverProcess?: cp.ChildProcess;
+    private _apiBaseUrl = 'http://127.0.0.1:8000';
+    private _threadId?: string;
+    private _isServerStarting = false;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
         private readonly _getCliCommand: () => Promise<string | null>
-    ) {}
+    ) {
+        this._generateNewThreadId();
+    }
 
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
@@ -24,11 +29,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
+        // Start the server when sidebar is opened
+        this._startServer();
+
         webviewView.webview.onDidReceiveMessage(async (data) => {
             console.log('Received message from webview:', data);
             switch (data.type) {
                 case 'runCommand': {
-                    await this._runCommand(data.command);
+                    await this._runCommand(data.command, data.params);
                     break;
                 }
                 case 'clearOutput': {
@@ -36,11 +44,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                     break;
                 }
                 case 'startChat': {
-                    await this._startChat();
+                    this._generateNewThreadId();
+                    this._addMessage('system', '🆕 New chat session started.');
+                    this._setChatActive(true);
                     break;
                 }
                 case 'sendChatMessage': {
-                    this._sendChatMessage(data.message);
+                    await this._sendChatToApi(data.message);
                     break;
                 }
                 case 'stopChat': {
@@ -55,143 +65,389 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         this._view = panel;
     }
 
-    private async _runCommand(subCommand: string) {
-        console.log(`Running command: ${subCommand}`);
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
-        if (!workspaceFolder) {
-            this._addMessage('system', '❌ Error: No workspace folder open.');
+    private async _startServer() {
+        if (this._serverProcess || this._isServerStarting) {
             return;
         }
 
-        const commandBase = await this._getCliCommand();
-        if (!commandBase) {
-            this._addMessage('system', '❌ Error: pr-guard command not found. Please install pr-guard or configure the executable path in settings.');
-            return;
-        }
-
-        const fullCommand = `${commandBase} ${subCommand}`.trim();
-        this._addMessage('system', `🔄 Running: ${fullCommand}`);
-
-        const execOptions: cp.ExecOptions = {
-            cwd: workspaceFolder,
-            maxBuffer: 1024 * 1024 * 10, // 10MB buffer
-            shell: process.platform === 'win32' ? 'powershell.exe' : '/bin/sh',
-            env: { ...process.env, FORCE_COLOR: '0' }
-        };
-
-        // In PowerShell, if the command starts with quotes, you must use the call operator (&)
-        const finalCommand = (process.platform === 'win32' && fullCommand.startsWith('"')) 
-            ? `& ${fullCommand}` 
-            : fullCommand;
-        
-        const childProcess = cp.exec(finalCommand, execOptions);
-
-        childProcess.stdout?.on('data', (data: string) => {
-            this._appendToLastMessage(data);
-        });
-
-        childProcess.stderr?.on('data', (data: string) => {
-            this._appendToLastMessage(data);
-        });
-
-        childProcess.on('close', (code: number | null) => {
-            if (code === 0) {
-                this._addMessage('system', '✅ Command completed successfully');
-            } else {
-                this._addMessage('system', `❌ Command exited with code ${code}`);
+        // First check if a server is already running
+        try {
+            const checkResponse = await fetch(`${this._apiBaseUrl}/status`);
+            if (checkResponse.ok) {
+                this._addMessage('system', '✅ Connected to existing PR Guard Server.');
+                this._setChatActive(true);
+                return;
             }
-        });
+        } catch (e) {
+            // Server not running, proceed to start
+        }
 
-        childProcess.on('error', (err: Error) => {
-            console.error('Command error:', err);
-            this._addMessage('system', `❌ Error: ${err.message}`);
-        });
-    }
-
-    private async _startChat() {
-        console.log('Starting chat session');
+        this._isServerStarting = true;
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
         if (!workspaceFolder) {
             this._addMessage('system', '❌ Error: No workspace folder open.');
+            this._isServerStarting = false;
             return;
         }
 
         const commandBase = await this._getCliCommand();
         if (!commandBase) {
             this._addMessage('system', '❌ Error: pr-guard command not found.');
+            this._isServerStarting = false;
             return;
         }
 
-        this._clearMessages();
-        this._setChatActive(true);
-        this._addMessage('system', '🚀 Initializing PR Guard Chat...');
-
-        const execOptions: cp.SpawnOptions = {
-            cwd: workspaceFolder,
-            shell: process.platform === 'win32' ? 'powershell.exe' : true,
-            env: { ...process.env, FORCE_COLOR: '1' } // Force color for chat
-        };
-
-        // Create final command string
-        let finalCommand = `${commandBase} chat`;
-        if (process.platform === 'win32' && finalCommand.startsWith('"')) {
-            finalCommand = `& ${finalCommand}`;
+        // Command to run: pr-guard serve
+        let fullCommand = `${commandBase} serve`;
+        if (process.platform === 'win32' && fullCommand.startsWith('"')) {
+            fullCommand = `& ${fullCommand}`;
         }
+
+        this._addMessage('system', `🚀 Starting PR Guard Server with: ${fullCommand}`);
+
+        console.log(`Starting server with command: ${fullCommand}`);
         
-        this._chatProcess = cp.spawn(finalCommand, [], execOptions);
+        const shell = process.platform === 'win32' ? 'powershell.exe' : true;
+        
+        // Ensure command is a single string for shell
+        const spawnCommand = process.platform === 'win32' ? fullCommand : commandBase;
+        const spawnArgs = process.platform === 'win32' ? [] : ['serve'];
 
-        let lastMessageFromAssistant = false;
+        const child = cp.spawn(spawnCommand, spawnArgs, {
+            cwd: workspaceFolder,
+            shell: shell,
+            env: { ...process.env, FORCE_COLOR: '0' },
+            detached: false
+        });
 
-        this._chatProcess.stdout?.on('data', (data: Buffer) => {
-            const text = data.toString();
-            if (lastMessageFromAssistant) {
-                this._appendToLastMessage(text);
-            } else {
-                this._addMessage('assistant', text);
-                lastMessageFromAssistant = true;
+        this._serverProcess = child;
+
+        child.stdout?.on('data', (data) => {
+            console.log(`Server STDOUT: ${data}`);
+        });
+
+        child.stderr?.on('data', (data) => {
+            const errOutput = data.toString();
+            console.error(`Server STDERR: ${errOutput}`);
+            // Report major errors to UI
+            if (errOutput.toLowerCase().includes('error') || errOutput.toLowerCase().includes('fail')) {
+                this._addMessage('system', `⚠️ Server: ${errOutput.substring(0, 100)}...`);
             }
         });
 
-        this._chatProcess.stderr?.on('data', (data: Buffer) => {
-            const text = data.toString();
-            this._appendToLastMessage(text);
+        child.on('error', (err) => {
+            this._addMessage('system', `❌ Failed to spawn server: ${err.message}`);
         });
 
-        this._chatProcess.on('close', (code: number | null) => {
-            console.log(`Chat process closed with code ${code}`);
-            this._setChatActive(false);
-            if (code !== 0 && code !== null) {
-                this._addMessage('system', `Chat session ended (Code: ${code})`);
-            } else {
-                this._addMessage('system', 'Chat session ended');
+        child.on('close', (code) => {
+            console.log(`Server process exited with code ${code}`);
+            this._serverProcess = undefined;
+            // Only set starting to false here if we haven't succeeded yet
+            if (this._isServerStarting) {
+                this._isServerStarting = false;
+                this._addMessage('system', `⚠️ Server stopped (Code ${code}).`);
             }
         });
 
-        this._chatProcess.on('error', (err: Error) => {
-            console.error('Chat error:', err);
-            this._addMessage('system', `❌ Error: ${err.message}`);
-            this._setChatActive(false);
+        // Wait for server to be ready
+        let attempts = 0;
+        const maxAttempts = 15;
+        while (attempts < maxAttempts) {
+            try {
+                const response = await fetch(`${this._apiBaseUrl}/status`);
+                if (response.ok) {
+                    this._addMessage('system', '✅ PR Guard Server is ready!');
+                    this._isServerStarting = false;
+                    this._setChatActive(true);
+                    return;
+                }
+            } catch (e) {
+                // Not ready yet
+            }
+            attempts++;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        this._addMessage('system', '❌ Failed to connect to PR Guard Server after startup.');
+        this._isServerStarting = false;
+    }
+
+    private _generateNewThreadId() {
+        this._threadId = this._uuidv4();
+    }
+
+    private _uuidv4() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
         });
     }
 
-    private _sendChatMessage(message: string) {
-        if (!this._chatProcess || !this._chatProcess.stdin) {
-            this._addMessage('system', '❌ Chat is not active');
+    public stopServer() {
+        if (this._serverProcess) {
+            this._serverProcess.kill();
+            this._serverProcess = undefined;
+        }
+    }
+
+    private async _runStatusViaApi() {
+        this._addMessage('system', '📊 Checking Status via API...');
+        try {
+            const response = await fetch(`${this._apiBaseUrl}/status`);
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}`);
+            }
+            const data = await response.json() as any;
+            
+            let gitInfo = '';
+            if (typeof data.git === 'object') {
+                gitInfo = `Branch: ${data.git.branch}\nLast Commit: ${data.git.last_commit}`;
+            } else {
+                gitInfo = data.git;
+            }
+
+            const statusText = `**Git Status**\n${gitInfo}\n\n**Configuration**\n- OpenAI API Key: ${data.openai_api_key}\n- LangSmith Tracing: ${data.langsmith_tracing ? 'Enabled' : 'Disabled'}`;
+
+            this._addMessage('assistant', statusText);
+        } catch (error: any) {
+            this._addMessage('system', `❌ Error: ${error.message}`);
+        }
+    }
+
+    private async _runTreeViaApi(params: any) {
+        const path = params?.path || '.';
+        this._addMessage('system', `🌲 Getting Project Tree for "${path}" via API...`);
+        try {
+            const response = await fetch(`${this._apiBaseUrl}/tree?path=${encodeURIComponent(path)}`);
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}`);
+            }
+            const data = await response.json() as any;
+            
+            this._addMessage('assistant', `**Project Structure (${path})**\n\n\`\`\`\n${data.tree}\n\`\`\``);
+        } catch (error: any) {
+            this._addMessage('system', `❌ Error: ${error.message}`);
+        }
+    }
+
+    private async _runChangedViaApi(params: any) {
+        const base = params?.base || 'master';
+        const head = params?.head || 'HEAD';
+        this._addMessage('system', `📝 Listing changed files between ${base} and ${head}...`);
+        try {
+            const response = await fetch(`${this._apiBaseUrl}/changed?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`);
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}`);
+            }
+            const data = await response.json() as any;
+            
+            if (data.files && data.files.length > 0) {
+                this._addMessage('assistant', `**Changed Files (${base}...${head})**\n\n${data.files.map((f: string) => `- ${f}`).join('\n')}`);
+            } else {
+                this._addMessage('assistant', `**Changed Files (${base}...${head})**\n\nNo changes found.`);
+            }
+        } catch (error: any) {
+            this._addMessage('system', `❌ Error: ${error.message}`);
+        }
+    }
+
+    private async _runDiffViaApi(params: any) {
+        const base = params?.base || 'master';
+        const head = params?.head || 'HEAD';
+        this._addMessage('system', `🔍 Getting diff between ${base} and ${head}...`);
+        try {
+            const response = await fetch(`${this._apiBaseUrl}/diff?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`);
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}`);
+            }
+            const data = await response.json() as any;
+            
+            this._addMessage('assistant', `**Diff (${base}...${head})**\n\n\`\`\`diff\n${data.diff}\n\`\`\``);
+        } catch (error: any) {
+            this._addMessage('system', `❌ Error: ${error.message}`);
+        }
+    }
+
+    private async _runReviewViaApi() {
+        this._addMessage('system', '🤖 Starting AI Review via API...');
+        try {
+            const response = await fetch(`${this._apiBaseUrl}/review`, {
+                method: 'POST'
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}`);
+            }
+
+            if (!response.body) {
+                throw new Error('No response body');
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let accumulatedData = '';
+
+            this._addMessage('assistant', 'Starting review...'); 
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                accumulatedData += chunk;
+
+                const lines = accumulatedData.split('\n');
+                accumulatedData = lines.pop() || '';
+
+                for (const line of lines) {
+                    const cleanLine = line.trim();
+                    if (cleanLine.startsWith('data: ')) {
+                        const dataStr = cleanLine.substring(6);
+                        try {
+                            const data = JSON.parse(dataStr);
+                            if (data.type === 'tool_call') {
+                                this._addMessage('tool', data.name);
+                            } else if (data.type === 'report') {
+                                const reportHtml = this._formatReviewReport(data.content);
+                                this._addMessage('assistant', reportHtml);
+                            } else if (data.type === 'status') {
+                                this._addMessage('system', data.message);
+                            }
+                        } catch (e) {
+                            // Partial JSON
+                        }
+                    }
+                }
+            }
+            this._addMessage('system', '✅ Review completed.');
+        } catch (error: any) {
+            this._addMessage('system', `❌ Error: ${error.message}`);
+        }
+    }
+
+    private _formatReviewReport(content: any): string {
+        if (typeof content === 'string') return content;
+        
+        try {
+            const report = content;
+            let md = `## AI Review Report\n\n`;
+            md += `**Result:** ${report.event || 'COMPLETED'}\n\n`;
+            md += `${report.body || ''}\n\n`;
+            
+            if (report.comments && Array.isArray(report.comments)) {
+                md += `### Detailed Comments\n\n`;
+                report.comments.forEach((c: any) => {
+                    md += `#### 📝 ${c.path} (line ${c.position})\n`;
+                    md += `**Severity:** ${c.severity || 'info'}\n\n`;
+                    md += `${c.body}\n\n`;
+                    if (c.suggestion) {
+                        md += `**Suggestion:**\n\`\`\`\n${c.suggestion}\n\`\`\`\n\n`;
+                    }
+                    md += `---\n\n`;
+                });
+            }
+            return md;
+        } catch (e) {
+            return JSON.stringify(content, null, 2);
+        }
+    }
+
+    private async _sendChatToApi(message: string) {
+        if (!message) return;
+
+        this._addMessage('user', message);
+        
+        try {
+            const response = await fetch(`${this._apiBaseUrl}/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    message,
+                    thread_id: this._threadId 
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}`);
+            }
+
+            if (!response.body) {
+                throw new Error('No response body');
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let accumulatedData = '';
+            let started = false;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                accumulatedData += chunk;
+
+                const lines = accumulatedData.split('\n');
+                accumulatedData = lines.pop() || '';
+
+                for (const line of lines) {
+                    const cleanLine = line.trim();
+                    if (cleanLine.startsWith('data: ')) {
+                        const dataStr = cleanLine.substring(6);
+                        try {
+                            const data = JSON.parse(dataStr);
+                            if (data.type === 'token') {
+                                if (!started) {
+                                    this._addMessage('assistant', data.content);
+                                    started = true;
+                                } else {
+                                    this._appendToLastMessage(data.content);
+                                }
+                            } else if (data.type === 'tool_call') {
+                                this._addMessage('tool', data.name);
+                            }
+                        } catch (e) {
+                            // Partial JSON
+                        }
+                    }
+                }
+            }
+        } catch (error: any) {
+            this._addMessage('system', `❌ Error: ${error.message}`);
+        }
+    }
+
+    private async _runCommand(subCommand: string, params: any) {
+        if (subCommand === 'review') {
+            await this._runReviewViaApi();
+            return;
+        }
+        if (subCommand === 'status') {
+            await this._runStatusViaApi();
+            return;
+        }
+        if (subCommand === 'getTree') {
+            await this._runTreeViaApi(params);
+            return;
+        }
+        if (subCommand === 'getChanged') {
+            await this._runChangedViaApi(params);
+            return;
+        }
+        if (subCommand === 'getDiff') {
+            await this._runDiffViaApi(params);
             return;
         }
 
-        this._addMessage('user', message);
-        this._chatProcess.stdin.write(message + '\n');
+        console.log(`Running generic command: ${subCommand}`);
+        // Fallback for any other command...
     }
 
     private _stopChat() {
-        if (this._chatProcess) {
-            this._chatProcess.kill();
-            this._chatProcess = undefined;
-        }
+        this._setChatActive(false);
     }
 
-    private _addMessage(type: 'user' | 'assistant' | 'system', content: string) {
+    private _addMessage(type: 'user' | 'assistant' | 'system' | 'tool', content: string) {
         if (this._view) {
             this._view.webview.postMessage({
                 type: 'addMessage',
@@ -233,256 +489,321 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
                 <style>
-                    * {
-                        margin: 0;
-                        padding: 0;
-                        box-sizing: border-box;
+                    :root {
+                        --padding: 12px;
+                        --border-radius: 4px;
                     }
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
                     body {
-                        font-family: var(--vscode-editor-font-family);
-                        padding: 12px;
-                        color: var(--vscode-editor-foreground);
+                        font-family: var(--vscode-font-family);
+                        color: var(--vscode-foreground);
                         background-color: var(--vscode-editor-background);
                         height: 100vh;
                         display: flex;
                         flex-direction: column;
+                        overflow: hidden;
                     }
-                    .tabs {
-                        display: flex;
-                        gap: 4px;
-                        margin-bottom: 12px;
-                        border-bottom: 1px solid var(--vscode-panel-border);
-                    }
-                    .tab {
-                        padding: 8px 16px;
-                        background: transparent;
-                        border: none;
-                        color: var(--vscode-descriptionForeground);
-                        cursor: pointer;
-                        font-size: 13px;
-                        font-weight: 500;
-                        border-bottom: 2px solid transparent;
-                        transition: all 0.2s;
-                    }
-                    .tab:hover {
-                        color: var(--vscode-foreground);
-                    }
-                    .tab.active {
-                        color: var(--vscode-button-background);
-                        border-bottom-color: var(--vscode-button-background);
-                    }
-                    .tab-content {
-                        display: none;
-                        flex: 1;
-                        flex-direction: column;
-                        min-height: 0;
-                    }
-                    .tab-content.active {
-                        display: flex;
-                    }
-                    .button {
-                        width: 100%;
-                        padding: 10px;
-                        margin-bottom: 8px;
-                        background-color: var(--vscode-button-background);
-                        color: var(--vscode-button-foreground);
-                        border: none;
-                        text-align: center;
-                        cursor: pointer;
-                        border-radius: 4px;
-                        font-size: 13px;
-                        font-weight: 500;
-                        transition: background-color 0.2s;
-                    }
-                    .button:hover {
-                        background-color: var(--vscode-button-hoverBackground);
-                    }
-                    .button:disabled {
-                        opacity: 0.5;
-                        cursor: not-allowed;
-                    }
-                    .button.secondary {
-                        background-color: var(--vscode-button-secondaryBackground);
-                        color: var(--vscode-button-secondaryForeground);
-                    }
-                    .button.secondary:hover {
-                        background-color: var(--vscode-button-secondaryHoverBackground);
-                    }
-                    .section {
-                        margin-bottom: 16px;
-                    }
-                    h3 {
+                    
+                    /* VS Code Header Look */
+                    .header {
+                        padding: 8px 12px;
                         text-transform: uppercase;
                         font-size: 11px;
-                        font-weight: 600;
-                        opacity: 0.8;
-                        margin-bottom: 10px;
-                        letter-spacing: 0.5px;
-                    }
-                    .messages-container {
-                        flex: 1;
-                        overflow-y: auto;
-                        padding: 10px;
-                        border: 1px solid var(--vscode-panel-border);
-                        background: var(--vscode-editor-background);
-                        margin-bottom: 10px;
-                        border-radius: 4px;
-                    }
-                    .message {
-                        margin-bottom: 12px;
-                        padding: 8px 12px;
-                        border-radius: 6px;
-                        line-height: 1.5;
-                        font-size: 13px;
-                    }
-                    .message.user {
-                        background: var(--vscode-button-background);
-                        color: var(--vscode-button-foreground);
-                        margin-left: 20px;
-                    }
-                    .message.assistant {
-                        background: var(--vscode-input-background);
-                        color: var(--vscode-input-foreground);
-                        margin-right: 20px;
-                        white-space: pre-wrap;
-                        font-family: var(--vscode-editor-font-family);
-                    }
-                    .message.system {
-                        background: var(--vscode-inputValidation-infoBackground);
-                        color: var(--vscode-inputValidation-infoForeground);
-                        text-align: center;
-                        font-size: 12px;
-                        opacity: 0.9;
-                    }
-                    .input-container {
+                        font-weight: bold;
+                        color: var(--vscode-descriptionForeground);
                         display: flex;
-                        gap: 8px;
+                        justify-content: space-between;
+                        align-items: center;
+                        background: var(--vscode-sideBar-background);
                     }
-                    .input-container input {
-                        flex: 1;
+
+                    .tabs {
+                        display: flex;
+                        background: var(--vscode-sideBar-background);
+                        border-bottom: 1px solid var(--vscode-panel-border);
+                        padding: 0 4px;
+                    }
+                    .tab {
                         padding: 8px 12px;
+                        background: transparent;
+                        border: none;
+                        color: var(--vscode-tab-inactiveForeground);
+                        cursor: pointer;
+                        font-size: 12px;
+                        border-bottom: 1px solid transparent;
+                    }
+                    .tab.active {
+                        color: var(--vscode-tab-activeForeground);
+                        border-bottom: 1px solid var(--vscode-tab-activeForeground);
+                        font-weight: 600;
+                    }
+
+                    .main-content {
+                        flex: 1;
+                        display: flex;
+                        flex-direction: column;
+                        min-height: 0;
+                        padding: 8px;
+                    }
+
+                    .tab-content { display: none; flex: 1; flex-direction: column; min-height: 0; }
+                    .tab-content.active { display: flex; }
+
+                    /* Accordion/Sections */
+                    .collapsible {
+                        background: var(--vscode-sideBarSectionHeader-background);
+                        color: var(--vscode-sideBarSectionHeader-foreground);
+                        cursor: pointer;
+                        padding: 6px 8px;
+                        width: 100%;
+                        border: none;
+                        text-align: left;
+                        outline: none;
+                        font-size: 11px;
+                        font-weight: bold;
+                        text-transform: uppercase;
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
+                    }
+                    .collapsible:after {
+                        content: '\\u25B6';
+                        font-size: 8px;
+                        margin-left: auto;
+                        transition: transform 0.2s;
+                    }
+                    .collapsible.active:after {
+                        transform: rotate(90deg);
+                    }
+                    .content-section {
+                        padding: 12px 8px;
+                        display: block; /* Modified by JS */
+                        background: var(--vscode-sideBar-background);
+                        border-bottom: 1px solid var(--vscode-panel-border);
+                    }
+
+                    /* Form Elements */
+                    .input-group { margin-bottom: 10px; }
+                    .input-label { display: block; font-size: 11px; margin-bottom: 4px; color: var(--vscode-descriptionForeground); }
+                    input[type="text"] {
+                        width: 100%;
+                        padding: 6px 8px;
                         background: var(--vscode-input-background);
                         color: var(--vscode-input-foreground);
                         border: 1px solid var(--vscode-input-border);
-                        border-radius: 4px;
-                        font-size: 13px;
-                        font-family: var(--vscode-editor-font-family);
+                        border-radius: 2px;
+                        font-family: inherit;
+                        font-size: 12px;
                     }
-                    .input-container input:focus {
-                        outline: none;
+                    input[type="text"]:focus {
+                        outline: 1px solid var(--vscode-focusBorder);
                         border-color: var(--vscode-focusBorder);
                     }
-                    .input-container button {
-                        padding: 8px 16px;
-                        margin: 0;
+
+                    .button {
+                        width: 100%;
+                        padding: 6px;
+                        background-color: var(--vscode-button-background);
+                        color: var(--vscode-button-foreground);
+                        border: none;
+                        cursor: pointer;
+                        border-radius: 2px;
+                        font-size: 12px;
                     }
-                    .placeholder {
-                        color: var(--vscode-descriptionForeground);
-                        font-style: italic;
-                        text-align: center;
-                        padding: 40px 20px;
+                    .button:hover { background-color: var(--vscode-button-hoverBackground); }
+                    .button:disabled { opacity: 0.5; cursor: not-allowed; }
+                    .button.secondary {
+                        background-color: var(--vscode-button-secondaryBackground);
+                        color: var(--vscode-button-secondaryForeground);
+                        margin-top: 4px;
                     }
+
+                    /* Messages Area */
+                    .messages-container {
+                        flex: 1;
+                        overflow-y: auto;
+                        padding: 8px;
+                        background: var(--vscode-editor-background);
+                        border: 1px solid var(--vscode-panel-border);
+                        margin-top: 8px;
+                        border-radius: 4px;
+                    }
+                    .message { margin-bottom: 12px; font-size: 13px; line-height: 1.4; border-radius: 4px; padding: 8px; }
+                    .message.user { background: var(--vscode-button-background); color: var(--vscode-button-foreground); margin-left: 20px; }
+                    .message.assistant { background: var(--vscode-editor-lineHighlightBackground); border-left: 3px solid var(--vscode-button-background); }
+                    .message.system { font-size: 11px; opacity: 0.7; border-top: 1px solid var(--vscode-panel-border); padding-top: 4px; color: var(--vscode-descriptionForeground); margin-top: 8px; }
                     
-                    .ansi-black { color: #000000; }
-                    .ansi-red { color: #cd3131; }
-                    .ansi-green { color: #0dbc79; }
-                    .ansi-yellow { color: #e5e510; }
-                    .ansi-blue { color: #2472c8; }
-                    .ansi-magenta { color: #bc3fbc; }
-                    .ansi-cyan { color: #11a8cd; }
-                    .ansi-white { color: #e5e5e5; }
-                    .ansi-bright-black { color: #666666; }
-                    .ansi-bright-red { color: #f14c4c; }
-                    .ansi-bright-green { color: #23d18b; }
-                    .ansi-bright-yellow { color: #f5f543; }
-                    .ansi-bright-blue { color: #3b8eea; }
-                    .ansi-bright-magenta { color: #d670d6; }
-                    .ansi-bright-cyan { color: #29b8db; }
-                    .ansi-bright-white { color: #ffffff; }
-                    .ansi-bold { font-weight: bold; }
-                    .ansi-dim { opacity: 0.6; }
-                    .ansi-italic { font-style: italic; }
-                    .ansi-underline { text-decoration: underline; }
+                    /* Tool Call Styling - Outside AI message */
+                    .message.tool {
+                        background: var(--vscode-editor-inactiveSelectionBackground);
+                        border: 1px dashed var(--vscode-panel-border);
+                        font-family: var(--vscode-editor-font-family);
+                        font-size: 11px;
+                        padding: 4px 8px;
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        margin: 4px 0;
+                        opacity: 0.9;
+                    }
+                    .message.tool code { color: var(--vscode-textLink-foreground); }
+
+                    /* Markdown Overrides */
+                    .message pre { background: var(--vscode-textCodeBlock-background); padding: 8px; border-radius: 4px; overflow-x: auto; margin: 6px 0; width: 100%; }
+                    .message code { font-family: var(--vscode-editor-font-family); font-size: 12px; }
+
+                    .status-bar {
+                        padding: 4px 12px;
+                        font-size: 10px;
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
+                        background: var(--vscode-sideBarSectionHeader-background);
+                        border-top: 1px solid var(--vscode-panel-border);
+                    }
+                    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #666; }
+                    .status-dot.online { background: #0dbc79; box-shadow: 0 0 4px #0dbc79; }
+                    .status-dot.offline { background: #cd3131; }
+                    .placeholder { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--vscode-descriptionForeground); font-size: 12px; font-style: italic; }
+                    
+                    .chat-footer { padding: 8px; border-top: 1px solid var(--vscode-panel-border); }
+                    .input-row { display: flex; gap: 4px; }
                 </style>
+            </head>
+            <body>
+                <div class="header">
+                    <span>PR Guard Assistant</span>
+                </div>
+                
+                <div class="tabs">
+                    <button id="tab-commands" class="tab active" onclick="switchTab('commands')">COMMANDS</button>
+                    <button id="tab-chat" class="tab" onclick="switchTab('chat')">CHAT</button>
+                </div>
+                
+                <div class="main-content">
+                    <div id="commands-tab" class="tab-content active" style="overflow-y: auto;">
+                        <button class="collapsible active" onclick="toggleCollapsible(this)">AI Actions</button>
+                        <div class="content-section">
+                            <button class="button" onclick="runCommand('review')">Start Full Code Review</button>
+                        </div>
+
+                        <button class="collapsible active" onclick="toggleCollapsible(this)">Repository Analysis</button>
+                        <div class="content-section">
+                            <div class="input-group">
+                                <label class="input-label">Project Tree Path</label>
+                                <input type="text" id="tree-path" value="." placeholder="path/to/folder" />
+                                <button class="button secondary" onclick="runTreeWithParams()">Show Structure</button>
+                            </div>
+                            <div class="input-group">
+                                <label class="input-label">Compare Refs (Base...Head)</label>
+                                <div style="display:flex; gap:4px; margin-bottom:4px;">
+                                    <input type="text" id="ref-base" value="master" placeholder="base" />
+                                    <input type="text" id="ref-head" value="HEAD" placeholder="head" />
+                                </div>
+                                <div style="display:flex; gap:4px;">
+                                    <button class="button secondary" onclick="runChangedWithParams()">Changed Files</button>
+                                    <button class="button secondary" onclick="runDiffWithParams()">Show Diff</button>
+                                </div>
+                            </div>
+                            <button class="button secondary" onclick="runCommand('status')">System Status</button>
+                        </div>
+
+                        <div class="header" style="margin-top:12px; background:transparent;">
+                            <span>Output</span>
+                            <span style="cursor:pointer; text-decoration:underline;" onclick="clearMessages('commands-output')">Clear</span>
+                        </div>
+                        <div class="messages-container" id="commands-output">
+                            <div class="placeholder">Command output will appear here.</div>
+                        </div>
+                    </div>
+
+                    <div id="chat-tab" class="tab-content">
+                        <div class="messages-container" id="chat-messages">
+                            <div class="placeholder">How can I help you?</div>
+                        </div>
+                        <div class="chat-footer">
+                            <div class="input-row">
+                                <input type="text" id="chat-input" placeholder="Message PR Guard..." disabled />
+                                <button class="button" id="send-btn" onclick="sendMessage()" style="width: auto;" disabled>Send</button>
+                            </div>
+                            <button class="button secondary" onclick="startChat()" style="font-size: 11px; margin-top:8px;">New Session</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="status-bar">
+                    <div id="status-dot" class="status-dot"></div>
+                    <span id="status-text">Connecting...</span>
+                    <!-- Simplified Reconnect -->
+                    <span onclick="reconnect()" style="color:var(--vscode-textLink-foreground); cursor:pointer; margin-left:auto;">Refresh</span>
+                </div>
+
                 <script>
                     (function() {
                         const vscode = acquireVsCodeApi();
-                        let chatActive = false;
+                        let isOnline = false;
                         let currentTab = 'commands';
+
+                        marked.setOptions({ gfm: true, breaks: true });
+
+                        window.toggleCollapsible = function(el) {
+                            el.classList.toggle("active");
+                            const content = el.nextElementSibling;
+                            if (content.style.display === "none") {
+                                content.style.display = "block";
+                            } else {
+                                content.style.display = "none";
+                            }
+                        };
 
                         window.switchTab = function(tabName) {
                             currentTab = tabName;
-                            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                            
-                            const tabBtn = document.getElementById('tab-' + tabName);
-                            if (tabBtn) tabBtn.classList.add('active');
-                            const tabContent = document.getElementById(tabName + '-tab');
-                            if (tabContent) tabContent.classList.add('active');
+                            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-'+tabName));
+                            document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === tabName+'-tab'));
                         };
 
-                        window.runCommand = function(command) {
-                            vscode.postMessage({ type: 'runCommand', command: command });
+                        window.runCommand = function(command, params = {}) {
+                            vscode.postMessage({ type: 'runCommand', command, params });
                         };
 
-                        window.clearAllMessages = function() {
-                            const cmdOutput = document.getElementById('commands-output');
-                            if (cmdOutput) cmdOutput.innerHTML = '<div class="placeholder">Run a command to see output here...</div>';
-                            const chatOutput = document.getElementById('chat-messages');
-                            if (chatOutput) chatOutput.innerHTML = '<div class="placeholder">Click "Start Chat" to begin...</div>';
+                        window.runTreeWithParams = function() {
+                            const path = document.getElementById('tree-path').value;
+                            runCommand('getTree', { path });
+                        };
+
+                        window.runChangedWithParams = function() {
+                            const base = document.getElementById('ref-base').value;
+                            const head = document.getElementById('ref-head').value;
+                            runCommand('getChanged', { base, head });
+                        };
+
+                        window.runDiffWithParams = function() {
+                            const base = document.getElementById('ref-base').value;
+                            const head = document.getElementById('ref-head').value;
+                            runCommand('getDiff', { base, head });
                         };
 
                         window.startChat = function() {
                             vscode.postMessage({ type: 'startChat' });
                         };
-
-                        window.stopChat = function() {
-                            vscode.postMessage({ type: 'stopChat' });
+                        
+                        window.reconnect = function() {
+                             vscode.postMessage({ type: 'startChat' }); // Trigger re-check
                         };
 
                         window.sendMessage = function() {
                             const input = document.getElementById('chat-input');
-                            const message = input.value.trim();
-                            if (message && chatActive) {
-                                vscode.postMessage({ type: 'sendChatMessage', message: message });
+                            if (input.value.trim()) {
+                                vscode.postMessage({ type: 'sendChatMessage', message: input.value.trim() });
                                 input.value = '';
                             }
                         };
 
-                        function convertAnsiToHtml(text) {
-                            const esc = String.fromCharCode(27);
-                            let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                            
-                            // Simple ANSI split approach to avoid regex literals in template
-                            const parts = html.split(esc + '[');
-                            if (parts.length === 1) return html;
-                            
-                            let result = parts[0];
-                            for (let i = 1; i < parts.length; i++) {
-                                const m = parts[i].match(/^([0-9;]*)m/);
-                                if (m) {
-                                    const params = m[1];
-                                    const rest = parts[i].substring(m[0].length);
-                                    if (!params || params === '0') {
-                                        result += '</span>' + rest;
-                                    } else {
-                                        const codes = params.split(';').map(Number);
-                                        const classes = [];
-                                        codes.forEach(code => {
-                                            if (code === 1) classes.push('ansi-bold');
-                                            else if (code === 2) classes.push('ansi-dim');
-                                            else if (code >= 30 && code <= 37) classes.push('ansi-' + ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'][code - 30]);
-                                            else if (code >= 90 && code <= 97) classes.push('ansi-bright-' + ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'][code - 90]);
-                                        });
-                                        result += '<span class="' + classes.join(' ') + '">' + rest;
-                                    }
-                                } else {
-                                    result += parts[i];
-                                }
-                            }
-                            return result;
-                        }
+                        window.clearMessages = function(id) {
+                            document.getElementById(id).innerHTML = '<div class="placeholder">Cleared.</div>';
+                        };
 
                         function addMessage(type, content) {
                             const containerId = currentTab === 'chat' ? 'chat-messages' : 'commands-output';
@@ -491,10 +812,19 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                             
                             const placeholder = container.querySelector('.placeholder');
                             if (placeholder) placeholder.remove();
-                            
+
                             const div = document.createElement('div');
                             div.className = 'message ' + type;
-                            div.innerHTML = convertAnsiToHtml(content);
+                            
+                            if (type === 'tool') {
+                                div.innerHTML = "<span>🔧 Executing tool:</span> <code>" + content + "</code>";
+                            } else if (type === 'assistant' || type === 'system') {
+                                div.setAttribute('data-raw', content);
+                                div.innerHTML = marked.parse(content);
+                            } else {
+                                div.innerText = content;
+                            }
+                            
                             container.appendChild(div);
                             container.scrollTop = container.scrollHeight;
                         }
@@ -505,90 +835,52 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                             if (!container) return;
                             
                             const messages = container.querySelectorAll('.message');
-                            if (messages.length > 0) {
-                                messages[messages.length - 1].innerHTML += convertAnsiToHtml(content);
+                            let last = null;
+                            for(let i = messages.length-1; i>=0; i--) {
+                                if(messages[i].classList.contains('assistant')) {
+                                    last = messages[i];
+                                    break;
+                                }
+                            }
+
+                            if (last) {
+                                const raw = (last.getAttribute('data-raw') || '') + content;
+                                last.setAttribute('data-raw', raw);
+                                last.innerHTML = marked.parse(raw);
                             } else {
                                 addMessage('assistant', content);
                             }
                             container.scrollTop = container.scrollHeight;
                         }
 
-                        function setChatActive(active) {
-                            chatActive = active;
-                            const input = document.getElementById('chat-input');
-                            if (input) input.disabled = !active;
-                            const btn = document.getElementById('send-btn');
-                            if (btn) btn.disabled = !active;
-                            const startBtn = document.getElementById('start-chat-btn');
-                            if (startBtn) startBtn.style.display = active ? 'none' : 'block';
-                            const stopBtn = document.getElementById('stop-chat-btn');
-                            if (stopBtn) stopBtn.style.display = active ? 'block' : 'none';
-                        }
-
                         window.addEventListener('message', event => {
                             const m = event.data;
-                            if (m.type === 'addMessage') addMessage(m.messageType, m.content);
-                            else if (m.type === 'appendToLastMessage') appendToLastMessage(m.content);
-                            else if (m.type === 'clearMessages') window.clearAllMessages();
-                            else if (m.type === 'setChatActive') setChatActive(m.active);
-                        });
-
-                        document.addEventListener('DOMContentLoaded', () => {
-                            const input = document.getElementById('chat-input');
-                            if (input) {
-                                input.addEventListener('keypress', (e) => {
-                                    if (e.key === 'Enter') window.sendMessage();
-                                });
+                            switch (m.type) {
+                                case 'addMessage':
+                                    addMessage(m.messageType, m.content);
+                                    break;
+                                case 'appendToLastMessage':
+                                    appendToLastMessage(m.content);
+                                    break;
+                                case 'setChatActive':
+                                    isOnline = m.active;
+                                    document.getElementById('chat-input').disabled = !isOnline;
+                                    document.getElementById('send-btn').disabled = !isOnline;
+                                    document.getElementById('status-dot').className = 'status-dot ' + (isOnline ? 'online' : 'offline');
+                                    document.getElementById('status-text').innerText = isOnline ? 'Server Online' : 'Server Offline';
+                                    break;
+                                case 'clearMessages':
+                                    window.clearMessages('commands-output');
+                                    window.clearMessages('chat-messages');
+                                    break;
                             }
                         });
-                        
-                        console.log('PR Guard Sidebar Loaded');
+
+                        document.getElementById('chat-input').addEventListener('keypress', e => {
+                            if (e.key === 'Enter') sendMessage();
+                        });
                     })();
                 </script>
-            </head>
-            <body>
-                <div class="tabs">
-                    <button id="tab-commands" class="tab active" onclick="switchTab('commands')">Commands</button>
-                    <button id="tab-chat" class="tab" onclick="switchTab('chat')">💬 Chat</button>
-                </div>
-
-                <div id="commands-tab" class="tab-content active">
-                    <div class="section">
-                        <h3>Quick Actions</h3>
-                        <button class="button" onclick="runCommand('review')">📝 Start Review</button>
-                        <button class="button" onclick="runCommand('status')">📊 Check Status</button>
-                        <button class="button" onclick="runCommand('init')">⚙️ Run Init</button>
-                    </div>
-
-                    <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                            <h3 style="margin: 0;">Output</h3>
-                            <button class="button secondary" onclick="clearAllMessages()" style="width: auto; padding: 4px 12px; margin: 0; font-size: 11px;">Clear</button>
-                        </div>
-                        <div class="messages-container" id="commands-output">
-                            <div class="placeholder">Run a command to see output here...</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="chat-tab" class="tab-content">
-                    <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                            <h3 style="margin: 0;">Chat Session</h3>
-                            <div style="display: flex; gap: 8px;">
-                                <button id="start-chat-btn" class="button" onclick="startChat()" style="width: auto; padding: 4px 12px; margin: 0; font-size: 11px;">Start Chat</button>
-                                <button id="stop-chat-btn" class="button secondary" onclick="stopChat()" style="width: auto; padding: 4px 12px; margin: 0; font-size: 11px; display: none;">Stop</button>
-                            </div>
-                        </div>
-                        <div class="messages-container" id="chat-messages">
-                            <div class="placeholder">Click "Start Chat" to begin...</div>
-                        </div>
-                        <div class="input-container">
-                            <input type="text" id="chat-input" placeholder="Type message..." disabled />
-                            <button class="button" onclick="sendMessage()" id="send-btn" disabled>Send</button>
-                        </div>
-                    </div>
-                </div>
             </body>
             </html>`;
     }
