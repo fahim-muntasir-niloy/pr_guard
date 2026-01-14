@@ -1,4 +1,3 @@
-import os
 import json
 from typing import Optional
 from langchain.tools import tool
@@ -26,6 +25,7 @@ from pr_guard.utils.tool_utils import (
     _get_git_diff_between_branches,
     _get_git_log,
     _list_changed_files_between_branches,
+    _search_code_grep,
     _build_code,
 )
 
@@ -84,30 +84,7 @@ async def search_code_grep(pattern: str, path: str = ".") -> str:
     Searches for a pattern in the codebase.
     Use this to find references to functions, classes, or specific strings.
     """
-    results = []
-    ignored_dirs = {".git", "__pycache__", "node_modules", ".venv", "venv"}
-
-    try:
-        for root, dirs, files in os.walk(path):
-            dirs[:] = [d for d in dirs if d not in ignored_dirs]
-            for file in files:
-                file_path = os.path.join(root, file)
-                try:
-                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                        for line_num, line in enumerate(f, 1):
-                            if pattern in line:
-                                results.append(
-                                    f"{file_path}:{line_num}: {line.strip()}"
-                                )
-                except Exception:
-                    continue
-    except Exception as e:
-        return f"Error searching: {str(e)}"
-
-    if not results:
-        return f"No matches found for '{pattern}'."
-
-    return "\n".join(results[:50])
+    return await _search_code_grep(pattern=pattern, path=path)
 
 
 @tool(args_schema=ListChangedFilesInput)

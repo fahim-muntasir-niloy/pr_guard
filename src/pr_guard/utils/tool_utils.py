@@ -8,6 +8,13 @@ from pr_guard.utils.git_utils import (
 )
 
 
+def _is_safe_path(path: str, base_directory: str = ".") -> bool:
+    """Checks if the path is within the base directory to prevent traversal attacks."""
+    resolved_base = os.path.abspath(base_directory)
+    resolved_path = os.path.abspath(path)
+    return resolved_path.startswith(resolved_base)
+
+
 def _get_review_range() -> tuple[str, str]:
     """
     Determines the git range to use for reviews.
@@ -36,6 +43,9 @@ def _get_review_range() -> tuple[str, str]:
 
 
 async def _list_files_tree(path: str = ".", max_depth: int = 3) -> str:
+    if not _is_safe_path(path):
+        return f"Error: Access denied to path '{path}'."
+
     output = []
     ignored = {".git", "__pycache__", "node_modules", ".venv", "venv"}
 
@@ -69,6 +79,9 @@ async def _list_files_tree(path: str = ".", max_depth: int = 3) -> str:
 
 
 async def _read_file_cat(file_path: str) -> str:
+    if not _is_safe_path(file_path):
+        return f"Error: Access denied to path '{file_path}'."
+
     if not os.path.exists(file_path):
         return f"Error: File '{file_path}' not found."
 
@@ -121,6 +134,36 @@ async def _list_changed_files_between_branches(
     if base is None:
         base = get_default_branch()
     return _run_git_command(["diff", "--name-only", f"{base}...{head}"])
+
+
+async def _search_code_grep(pattern: str, path: str = ".") -> str:
+    if not _is_safe_path(path):
+        return f"Error: Access denied to path '{path}'."
+
+    results = []
+    ignored_dirs = {".git", "__pycache__", "node_modules", ".venv", "venv"}
+
+    try:
+        for root, dirs, files in os.walk(path):
+            dirs[:] = [d for d in dirs if d not in ignored_dirs]
+            for file in files:
+                file_path = os.path.join(root, file)
+                try:
+                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                        for line_num, line in enumerate(f, 1):
+                            if pattern in line:
+                                results.append(
+                                    f"{file_path}:{line_num}: {line.strip()}"
+                                )
+                except Exception:
+                    continue
+    except Exception as e:
+        return f"Error searching: {str(e)}"
+
+    if not results:
+        return f"No matches found for '{pattern}'."
+
+    return "\n".join(results[:50])
 
 
 async def _test_project_build() -> dict:
