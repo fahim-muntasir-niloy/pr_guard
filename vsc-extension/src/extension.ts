@@ -5,6 +5,7 @@ import { getWebviewContent } from './webviewContent';
 import { SidebarProvider } from './SidebarProvider';
 
 let outputChannel: vscode.OutputChannel;
+let sidebarProvider: SidebarProvider;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('PR Guard Extension is now active!');
@@ -13,7 +14,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(outputChannel);
 
     // Register Sidebar Provider
-    const sidebarProvider = new SidebarProvider(context.extensionUri, getCliCommand);
+    sidebarProvider = new SidebarProvider(context.extensionUri, getCliCommand);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
             "pr-guard.sidebarView",
@@ -68,14 +69,14 @@ export function activate(context: vscode.ExtensionContext) {
         runCommandInOutputChannel('status', 'Checking Status...');
     });
 
-    // Command: Init
-    let initDisposable = vscode.commands.registerCommand('pr-guard.init', async () => {
-        runCommandInOutputChannel('init', 'Initializing PR Guard...');
-    });
-
     context.subscriptions.push(reviewDisposable);
     context.subscriptions.push(statusDisposable);
-    context.subscriptions.push(initDisposable);
+}
+
+export function deactivate() {
+    if (sidebarProvider) {
+        sidebarProvider.stopServer();
+    }
 }
 
 async function runCommandInOutputChannel(subcommand: string, startMessage: string) {
@@ -127,26 +128,35 @@ async function getCliCommand(): Promise<string | null> {
     if (executablePath && executablePath.trim().length > 0) {
         commandBase = `"${executablePath}"`;
     } 
-    // 2. Check standard installation location (Windows)
-    else if (process.platform === 'win32') {
+    // 2. Check workspace-local .venv (Windows)
+    if (!commandBase && process.platform === 'win32') {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders) {
+            const fs = require('fs');
+            const localPath = path.join(workspaceFolders[0].uri.fsPath, '.venv', 'Scripts', 'pr-guard.exe');
+            if (fs.existsSync(localPath)) {
+                commandBase = `"${localPath}"`;
+            }
+        }
+    }
+
+    // 3. Check standard installation location (Windows)
+    if (!commandBase && process.platform === 'win32') {
         const homeDir = os.homedir();
         const standardPath = path.join(homeDir, '.pr_guard', '.venv', 'Scripts', 'pr-guard.exe');
         
-        // Check if the standard installation exists
         const fs = require('fs');
         if (fs.existsSync(standardPath)) {
             commandBase = `"${standardPath}"`;
         }
-        // Fallback: try PowerShell function
-        else if (await checkCommand('powershell -Command "pr-guard --version"')) {
-            commandBase = 'pr-guard';
-        }
     }
-    // 3. Check if 'pr-guard' is available as a system command (Linux/Mac)
-    else if (await checkCommand('pr-guard --version')) {
+
+    // 4. Fallback: try global command
+    if (!commandBase && await checkCommand(process.platform === 'win32' ? 'powershell -Command "pr-guard --version"' : 'pr-guard --version')) {
         commandBase = 'pr-guard';
     }
-    // 4. Fallback: try as Python module
+
+    // 5. Fallback: try as Python module
     if (!commandBase && await checkCommand('python -m pr_guard --version')) {
         commandBase = 'python -m pr_guard';
     }
@@ -166,5 +176,3 @@ function checkCommand(cmd: string): Promise<boolean> {
         });
     });
 }
-
-export function deactivate() {}
