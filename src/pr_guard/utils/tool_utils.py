@@ -15,21 +15,22 @@ def _get_review_range() -> tuple[str, str]:
     Locally, it defaults to master...HEAD or HEAD~1...HEAD.
     """
     base = os.getenv("GITHUB_BASE_REF")
-    head = os.getenv("GITHUB_HEAD_REF") or "HEAD"
 
     if base:
-        # In GitHub Actions, we typically need to reference the origin
-        # unless it's explicitly checked out.
-        return f"origin/{base}", head
+        # In CI (GitHub Actions), HEAD is the current detached state we want to review.
+        # We try to use origin/{base} but fallback to {base} if origin reference isn't found.
+        base_ref = f"origin/{base}"
+        check = _run_git_command(["rev-parse", "--verify", base_ref])
+        if "Error" in check:
+            base_ref = base
+        return base_ref, "HEAD"
 
     # Check if we are on a branch and master/main exists
     default = get_default_branch()
     current = _run_git_command(["rev-parse", "--abbrev-ref", "HEAD"]).strip()
 
-    if current != default and "Error" not in current:
-        return f"origin/{default}" if "Error" not in _run_git_command(
-            ["rev-parse", "--verify", default]
-        ) else default, head
+    if current != default and "Error" not in current and "Error" not in default:
+        return default, "HEAD"
 
     return "HEAD~1", "HEAD"
 
