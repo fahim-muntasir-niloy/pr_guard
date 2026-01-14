@@ -25,7 +25,7 @@ async def review_event_generator(agent) -> AsyncGenerator[str, None]:
                 last_msg = update["messages"][-1]
                 if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
                     for tc in last_msg.tool_calls:
-                        yield f"data: {json.dumps({'type': 'tool', 'name': tc['name'], 'args': tc['args']})}\n\n"
+                        yield f"data: {json.dumps({'type': 'tool_call', 'name': tc['name'], 'args': tc['args']})}\n\n"
 
             # Stream the final structured response when available
             if "structured_response" in update:
@@ -51,7 +51,7 @@ async def chat_event_generator(
                     latest_msg = step_data["messages"][-1]
                     if hasattr(latest_msg, "tool_calls") and latest_msg.tool_calls:
                         for tc in latest_msg.tool_calls:
-                            yield f"data: {json.dumps({'type': 'tool', 'name': tc.get('name')})}\n\n"
+                            yield f"data: {json.dumps({'type': 'tool_call', 'name': tc.get('name')})}\n\n"
         elif stream_mode_name == "messages":
             msg, metadata = data
             if isinstance(msg, AIMessageChunk) and msg.content:
