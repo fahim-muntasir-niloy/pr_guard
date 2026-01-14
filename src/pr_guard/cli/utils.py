@@ -13,7 +13,7 @@ from pr_guard.config import settings
 import uuid
 from langchain.messages import AIMessageChunk
 from pr_guard.utils.github_utils import post_github_review, build_github_review_payload
-from pr_guard.tools import (
+from pr_guard.utils.tool_utils import (
     _list_files_tree,
     _get_git_diff_between_branches,
     _get_git_log,
@@ -340,7 +340,7 @@ jobs:
             console.print("[red]Aborted.[/red]")
             return
 
-    with open(workflow_path, "w") as f:
+    with open(workflow_path, "w", encoding="utf-8") as f:
         f.write(workflow_content)
 
     console.print(f"[bold green]✅ Successfully created {workflow_path}[/bold green]")
@@ -377,7 +377,8 @@ async def run_diff(base: str = "master", head: str = "HEAD"):
 
 
 async def run_log(limit: int = 10):
-    log_content = await _get_git_log(limit=limit)
+    log_data = await _get_git_log(limit=limit)
+    log_content = json.dumps(log_data, indent=4)
     console.print(Panel(log_content, title="📜 Git Log", border_style="cyan"))
 
 
@@ -412,9 +413,7 @@ def run_status():
     )
     table.add_row(
         "LangSmith Tracing",
-        "[green]Enabled[/green]"
-        if os.getenv("LANGSMITH_TRACING") == "true"
-        else "Disabled",
+        "[green]Enabled[/green]" if settings.LANGSMITH_API_KEY else "Disabled",
     )
 
     console.print(table)
@@ -439,6 +438,21 @@ def run_version():
         console.print(f"PR Guard version: [bold cyan]{ver}[/bold cyan]")
     except importlib.metadata.PackageNotFoundError:
         console.print("PR Guard version: [bold cyan]0.2.1[/bold cyan] (local)")
+
+
+def run_serve(host: str = "127.0.0.1", port: int = 8000):
+    """
+    🚀 Start the FastAPI server.
+    """
+    import uvicorn
+    from pr_guard.api.main import app
+
+    console.print(
+        f"\n[bold green]🚀 Starting PR Guard API server at http://{host}:{port}[/bold green]"
+    )
+    console.print("[dim]Press Ctrl+C to stop the server[/dim]\n")
+
+    uvicorn.run(app, host=host, port=port)
 
 
 async def chat_loop():
