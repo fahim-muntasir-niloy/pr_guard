@@ -1,10 +1,9 @@
-import os
+import json
 from typing import Optional
 from langchain.tools import tool
 from pr_guard.utils.git_utils import (
     _run_git_command,
     _run_shell_command,
-    get_default_branch,
     _split_command,
 )
 from pr_guard.schema.tool_schema import (
@@ -19,65 +18,16 @@ from pr_guard.schema.tool_schema import (
     GHViewPRInput,
     GHCommandInput,
 )
-
-
-def _get_review_range() -> tuple[str, str]:
-    """
-    Determines the git range to use for reviews.
-    In CI, it uses GITHUB_BASE_REF and GITHUB_HEAD_REF.
-    Locally, it defaults to master...HEAD or HEAD~1...HEAD.
-    """
-    base = os.getenv("GITHUB_BASE_REF")
-    head = os.getenv("GITHUB_HEAD_REF") or "HEAD"
-
-    if base:
-        # In GitHub Actions, we typically need to reference the origin
-        # unless it's explicitly checked out.
-        return f"origin/{base}", head
-
-    # Check if we are on a branch and master/main exists
-    default = get_default_branch()
-    current = _run_git_command(["rev-parse", "--abbrev-ref", "HEAD"]).strip()
-
-    if current != default and "Error" not in current:
-        return f"origin/{default}" if "Error" not in _run_git_command(
-            ["rev-parse", "--verify", default]
-        ) else default, head
-
-    return "HEAD~1", "HEAD"
-
-
-async def _list_files_tree(path: str = ".", max_depth: int = 3) -> str:
-    output = []
-    ignored = {".git", "__pycache__", "node_modules", ".venv", "venv"}
-
-    def _build_tree(current_path: str, prefix: str = "", depth: int = 0):
-        if depth > max_depth:
-            return
-
-        try:
-            items = sorted(os.listdir(current_path))
-        except Exception as e:
-            output.append(f"{prefix}[Error reading {current_path}: {e}]")
-            return
-
-        for i, item in enumerate(items):
-            if item in ignored:
-                continue
-
-            full_path = os.path.join(current_path, item)
-            is_last = i == len(items) - 1
-            connector = "└── " if is_last else "├── "
-
-            output.append(f"{prefix}{connector}{item}")
-
-            if os.path.isdir(full_path):
-                extension = "    " if is_last else "│   "
-                _build_tree(full_path, prefix + extension, depth + 1)
-
-    output.append(path)
-    _build_tree(path)
-    return "\n".join(output)
+from pr_guard.utils.tool_utils import (
+    _get_review_range,
+    _list_files_tree,
+    _read_file_cat,
+    _get_git_diff_between_branches,
+    _get_git_log,
+    _list_changed_files_between_branches,
+    _search_code_grep,
+    _build_code,
+)
 
 
 @tool(args_schema=ListFilesInput)
@@ -87,23 +37,6 @@ async def list_files_tree(path: str = ".", max_depth: int = 3) -> str:
     Use this to understand the project structure.
     """
     return await _list_files_tree(path=path, max_depth=max_depth)
-
-
-async def _read_file_cat(file_path: str) -> str:
-    if not os.path.exists(file_path):
-        return f"Error: File '{file_path}' not found."
-
-    if os.path.isdir(file_path):
-        return f"Error: '{file_path}' is a directory. Use list_files_tree instead."
-
-    try:
-        if os.path.getsize(file_path) > 1_000_000:
-            return f"Error: File '{file_path}' is too large to read (> 1MB)."
-
-        with open(file_path, "r", encoding="utf-8") as f:
-            return f.read()
-    except Exception as e:
-        return f"Error reading file: {str(e)}"
 
 
 @tool(args_schema=ReadFileInput)
@@ -124,14 +57,6 @@ async def list_git_branches() -> str:
     return _run_git_command(["branch", "-a"])
 
 
-async def _get_git_diff_between_branches(
-    base: Optional[str] = None, head: str = "HEAD"
-) -> str:
-    if base is None:
-        base = get_default_branch()
-    return _run_git_command(["diff", f"{base}...{head}"])
-
-
 @tool(args_schema=GitDiffInput)
 async def get_git_diff_between_branches(
     base: Optional[str] = None, head: str = "HEAD"
@@ -143,17 +68,14 @@ async def get_git_diff_between_branches(
     return await _get_git_diff_between_branches(base=base, head=head)
 
 
-async def _get_git_log(limit: int = 5) -> str:
-    return _run_git_command(["log", "-n", str(limit), "--oneline", "--graph", "--all"])
-
-
 @tool(args_schema=GitLogInput)
 async def get_git_log(limit: int = 5) -> str:
     """
     Returns the recent git commit log.
     Use this to understand the history of changes.
     """
-    return await _get_git_log(limit=limit)
+    logs = await _get_git_log(limit=limit)
+    return json.dumps(logs, indent=4)
 
 
 @tool(args_schema=SearchCodeInput)
@@ -162,38 +84,7 @@ async def search_code_grep(pattern: str, path: str = ".") -> str:
     Searches for a pattern in the codebase.
     Use this to find references to functions, classes, or specific strings.
     """
-    results = []
-    ignored_dirs = {".git", "__pycache__", "node_modules", ".venv", "venv"}
-
-    try:
-        for root, dirs, files in os.walk(path):
-            dirs[:] = [d for d in dirs if d not in ignored_dirs]
-            for file in files:
-                file_path = os.path.join(root, file)
-                try:
-                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                        for line_num, line in enumerate(f, 1):
-                            if pattern in line:
-                                results.append(
-                                    f"{file_path}:{line_num}: {line.strip()}"
-                                )
-                except Exception:
-                    continue
-    except Exception as e:
-        return f"Error searching: {str(e)}"
-
-    if not results:
-        return f"No matches found for '{pattern}'."
-
-    return "\n".join(results[:50])
-
-
-async def _list_changed_files_between_branches(
-    base: Optional[str] = None, head: Optional[str] = "HEAD"
-) -> str:
-    if base is None:
-        base = get_default_branch()
-    return _run_git_command(["diff", "--name-only", f"{base}...{head}"])
+    return await _search_code_grep(pattern=pattern, path=path)
 
 
 @tool(args_schema=ListChangedFilesInput)
@@ -251,6 +142,16 @@ async def get_diff_of_single_file(file_path: str) -> str:
     return "\n".join(marked_lines)
 
 
+@tool(args_schema=NoInput)
+async def build_code() -> str:
+    """
+    Automatically detects the project type and attempts to build the code.
+    Returns the build output or error message if the build fails.
+    Use this to verify if the changes break the build.
+    """
+    return await _build_code()
+
+
 @tool(args_schema=GHCreatePRInput)
 async def gh_pr_create(
     title: str,
@@ -261,6 +162,8 @@ async def gh_pr_create(
 ) -> str:
     """
     Creates a GitHub Pull Request using the 'gh' CLI.
+    Always ask for the branch names of base and head,
+    if not clearly provided.
     """
     cmd = ["gh", "pr", "create", "--title", title, "--body", body]
     if base:
@@ -301,6 +204,7 @@ async def execute_github_command(command: str) -> str:
 TOOLS = [
     get_list_of_changed_files,
     get_diff_of_single_file,
+    build_code,
     list_files_tree,
     read_file_cat,
     list_git_branches,

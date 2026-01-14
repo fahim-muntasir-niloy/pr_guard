@@ -63,12 +63,14 @@ class GHCreatePRInput(BaseModel):
         extra="forbid", json_schema_extra={"additionalProperties": False}
     )
     title: str = Field(description="The title of the pull request")
-    body: str = Field(description="The body/description of the pull request")
-    base: Optional[str] = Field(
-        description="The branch into which you want your code merged. Defaults to master/main."
+    body: str = Field(
+        description="""Description of the pull request. 
+    Make the description only from the latest commits in this current PR, 
+    not from the older commits."""
     )
+    base: Optional[str] = Field(description="The branch into which the PR is merged.")
     head: Optional[str] = Field(
-        description="The branch that contains your changes. Defaults to current branch."
+        description="The branch that contains the changes. Defaults to current branch."
     )
     draft: bool = Field(
         default=False, description="Whether to create the PR as a draft"

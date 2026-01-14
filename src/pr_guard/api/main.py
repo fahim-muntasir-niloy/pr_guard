@@ -1,0 +1,232 @@
+from pydantic import BaseModel, Field
+from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, HTTPException, Query
+from pr_guard.api.utils import review_event_generator, chat_event_generator
+from typing import List, Optional, Any
+
+app = FastAPI(
+    title="PR Guard API",
+    description="API for AI-powered Pull Request Reviewer and Guard",
+    version="0.1.0",
+)
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., description="Message to send to the AI assistant")
+    thread_id: Optional[str] = Field(
+        None, description="Optional thread ID to maintain conversation state"
+    )
+
+
+class GitStatus(BaseModel):
+    branch: str = Field(..., description="Current git branch")
+    last_commit: str = Field(..., description="Last commit hash and subject")
+
+
+class StatusResponse(BaseModel):
+    git: Any = Field(..., description="Git repository status")
+    openai_api_key: str = Field(..., description="Status of the OpenAI API key")
+    langsmith_api_key: str = Field(..., description="Status of the LangSmith API key")
+    langsmith_tracing: bool = Field(
+        ..., description="Whether LangSmith tracing is enabled"
+    )
+
+
+class TreeResponse(BaseModel):
+    path: str = Field(..., description="The path listed")
+    tree: str = Field(..., description="The directory structure in tree format")
+
+
+class ChangedFilesResponse(BaseModel):
+    base: str = Field(..., description="Base reference")
+    head: str = Field(..., description="Head reference")
+    files: List[str] = Field(..., description="List of changed file paths")
+
+
+class DiffResponse(BaseModel):
+    base: str = Field(..., description="Base reference")
+    head: str = Field(..., description="Head reference")
+    diff: str = Field(..., description="Git diff content")
+
+
+class CommitInfo(BaseModel):
+    hash: str = Field(..., description="Short commit hash")
+    author: str = Field(..., description="Author name")
+    date: str = Field(..., description="Commit date")
+    subject: str = Field(..., description="Commit message subject")
+
+
+class LogResponse(BaseModel):
+    limit: int = Field(..., description="Number of commits returned")
+    log: List[CommitInfo] = Field(..., description="List of commit logs")
+
+
+class CatResponse(BaseModel):
+    path: str = Field(..., description="File path")
+    content: str = Field(..., description="File content")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Setup environment variables on startup."""
+    from pr_guard.cli.utils import setup_env
+
+    setup_env()
+
+
+@app.get(
+    "/status",
+    response_model=StatusResponse,
+    tags=["General"],
+    summary="Get environment and repository status",
+    description="Returns the current git branch, last commit, and configuration status for API keys.",
+)
+async def status():
+    import subprocess
+    from pr_guard.config import settings
+    import os
+
+    status_data = {}
+    try:
+        branch = (
+            subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+            .decode()
+            .strip()
+        )
+        last_commit = (
+            subprocess.check_output(["git", "log", "-1", "--format=%h %s"])
+            .decode()
+            .strip()
+        )
+        status_data["git"] = {"branch": branch, "last_commit": last_commit}
+    except Exception:
+        status_data["git"] = "Not a git repo or git not found"
+
+    status_data["openai_api_key"] = (
+        "Configured" if settings.OPENAI_API_KEY else "Missing"
+    )
+    status_data["langsmith_api_key"] = (
+        "Configured" if settings.LANGSMITH_API_KEY else "Missing"
+    )
+    status_data["langsmith_tracing"] = os.getenv("LANGSMITH_TRACING") == "true"
+
+    return status_data
+
+
+@app.get(
+    "/tree",
+    response_model=TreeResponse,
+    tags=["Repository"],
+    summary="Visualize project structure",
+    description="Returns a tree-like visualization of the project's directory structure.",
+)
+async def tree(
+    path: str = Query(".", description="Path to list (defaults to project root)"),
+):
+    from pr_guard.utils.tool_utils import _list_files_tree
+
+    output = await _list_files_tree(path=path)
+    return {"path": path, "tree": output}
+
+
+@app.get(
+    "/changed",
+    response_model=ChangedFilesResponse,
+    tags=["Git"],
+    summary="List changed files",
+    description="Lists the files that have changed between two git references.",
+)
+async def changed(
+    base: str = Query("master", description="Base branch or commit"),
+    head: str = Query("HEAD", description="Head branch or commit"),
+):
+    from pr_guard.utils.tool_utils import _list_changed_files_between_branches
+
+    files = await _list_changed_files_between_branches(base=base, head=head)
+    return {
+        "base": base,
+        "head": head,
+        "files": files.splitlines() if files.strip() else [],
+    }
+
+
+@app.get(
+    "/diff",
+    response_model=DiffResponse,
+    tags=["Git"],
+    summary="Get git diff",
+    description="Returns the unified git diff between two references.",
+)
+async def diff(
+    base: str = Query("master", description="Base branch or commit"),
+    head: str = Query("HEAD", description="Head branch or commit"),
+):
+    from pr_guard.utils.tool_utils import _get_git_diff_between_branches
+
+    diff_content = await _get_git_diff_between_branches(base=base, head=head)
+    return {"base": base, "head": head, "diff": diff_content}
+
+
+@app.get(
+    "/log",
+    response_model=LogResponse,
+    tags=["Git"],
+    summary="Show commit log",
+    description="Returns a list of recent commits with hash, author, date, and subject.",
+)
+async def log(
+    limit: int = Query(10, description="Number of commits to retrieve", ge=1),
+):
+    from pr_guard.utils.tool_utils import _get_git_log
+
+    log_content = await _get_git_log(limit=limit)
+    return {"limit": limit, "log": log_content}
+
+
+@app.get(
+    "/cat",
+    response_model=CatResponse,
+    tags=["Repository"],
+    summary="Read file content",
+    description="Reads and returns the content of a specific file in the repository.",
+)
+async def cat(path: str = Query(..., description="File path relative to project root")):
+    from pr_guard.utils.tool_utils import _read_file_cat
+
+    content = await _read_file_cat(file_path=path)
+    if content.startswith("Error:"):
+        raise HTTPException(status_code=404, detail=content)
+    return {"path": path, "content": content}
+
+
+@app.post(
+    "/review",
+    tags=["AI"],
+    summary="Trigger AI code review (Streaming)",
+    description="Starts a streaming AI code review process. Yields tool calls and eventually the full review report as SSE events.",
+)
+async def review():
+    from pr_guard.agent import init_review_agent
+
+    agent = await init_review_agent()
+    return StreamingResponse(
+        review_event_generator(agent), media_type="text/event-stream"
+    )
+
+
+@app.post(
+    "/chat",
+    tags=["AI"],
+    summary="Chat with PR Guard (Streaming)",
+    description="Starts a streaming chat session with the PR Guard assistant. Yields tokens and tool calls as SSE events.",
+)
+async def chat(request: ChatRequest):
+    import uuid
+    from pr_guard.agent import chat_agent
+
+    thread_id = request.thread_id or str(uuid.uuid4())
+    agent = await chat_agent()
+    return StreamingResponse(
+        chat_event_generator(agent, request.message, thread_id),
+        media_type="text/event-stream",
+    )

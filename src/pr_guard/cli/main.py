@@ -14,6 +14,7 @@ from pr_guard.cli.utils import (
     run_status,
     run_cat,
     run_version,
+    run_serve,
 )
 
 app = typer.Typer(
@@ -146,6 +147,17 @@ def version():
     Show the version of PR Guard.
     """
     run_version()
+
+
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", "--host", help="Host to bind the server to"),
+    port: int = typer.Option(8000, "--port", help="Port to bind the server to"),
+):
+    """
+    🚀 [bold cyan]Serve[/bold cyan] the PR Guard API.
+    """
+    run_serve(host=host, port=port)
 
 
 if __name__ == "__main__":
