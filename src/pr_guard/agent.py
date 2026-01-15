@@ -14,7 +14,7 @@ async def init_review_agent():
         tools=TOOLS,
         model=llm,
         system_prompt=review_prompt,
-        # middleware=[ToolCallLimitMiddleware(run_limit=10)],
+        middleware=[ToolCallLimitMiddleware(run_limit=5)],
         name="PR_Guard_Agent",
         response_format=ToolStrategy(GitHubPRReview),
     )
@@ -26,6 +26,7 @@ async def chat_agent():
         tools=TOOLS,
         model=llm,
         system_prompt=cli_prompt,
+        middleware=[ToolCallLimitMiddleware(run_limit=5)],
         name="PR_Guard_Agent",
         checkpointer=InMemorySaver(),
     )

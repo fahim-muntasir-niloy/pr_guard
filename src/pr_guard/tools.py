@@ -17,6 +17,7 @@ from pr_guard.schema.tool_schema import (
     GHCreatePRInput,
     GHViewPRInput,
     GHCommandInput,
+    GitCommandInput,
 )
 from pr_guard.utils.tool_utils import (
     _get_review_range,
@@ -118,6 +119,10 @@ async def get_list_of_changed_files() -> dict[str, list[str]]:
     """
     base, head = _get_review_range()
     files = _run_git_command(["diff", "--name-only", f"{base}...{head}"])
+
+    if len(files.splitlines()) > 50:
+        return "Too many files changed."
+
     return {"files": files.splitlines()}
 
 
@@ -201,10 +206,26 @@ async def execute_github_command(command: str) -> str:
     return _run_shell_command(cmd)
 
 
+@tool(args_schema=GitCommandInput)
+async def execute_git_operations(command: str) -> str:
+    """
+    Executes a git CLI command.
+    commands will start with git
+    Use this to perform git operations.
+    eg: git add ., git commit -m "message", git push,
+    git branch -a, git checkout <branch_name>,
+    git merge <branch_name>, git pull, etc.
+    """
+    cmd = _split_command(command)
+    if not cmd or cmd[0] != "git":
+        return "Error: only 'git' commands are allowed"
+    return _run_shell_command(cmd)
+
+
 TOOLS = [
     get_list_of_changed_files,
     get_diff_of_single_file,
-    build_code,
+    # build_code,
     list_files_tree,
     read_file_cat,
     list_git_branches,
@@ -215,4 +236,5 @@ TOOLS = [
     gh_pr_create,
     gh_pr_view,
     execute_github_command,
+    execute_git_operations,
 ]

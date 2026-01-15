@@ -1,8 +1,18 @@
-from pydantic import BaseModel, Field
 from fastapi.responses import StreamingResponse
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware import CORSMiddleware
 from pr_guard.api.utils import review_event_generator, chat_event_generator
-from typing import List, Optional, Any
+from pr_guard.schema.api_schema import (
+    ChatRequest,
+    GitStatus,
+    StatusResponse,
+    TreeResponse,
+    ChangedFilesResponse,
+    DiffResponse,
+    CommitInfo,
+    LogResponse,
+    CatResponse,
+)
 
 app = FastAPI(
     title="PR Guard API",
@@ -11,67 +21,21 @@ app = FastAPI(
 )
 
 
-class ChatRequest(BaseModel):
-    message: str = Field(..., description="Message to send to the AI assistant")
-    thread_id: Optional[str] = Field(
-        None, description="Optional thread ID to maintain conversation state"
-    )
-
-
-class GitStatus(BaseModel):
-    branch: str = Field(..., description="Current git branch")
-    last_commit: str = Field(..., description="Last commit hash and subject")
-
-
-class StatusResponse(BaseModel):
-    git: Any = Field(..., description="Git repository status")
-    openai_api_key: str = Field(..., description="Status of the OpenAI API key")
-    langsmith_api_key: str = Field(..., description="Status of the LangSmith API key")
-    langsmith_tracing: bool = Field(
-        ..., description="Whether LangSmith tracing is enabled"
-    )
-
-
-class TreeResponse(BaseModel):
-    path: str = Field(..., description="The path listed")
-    tree: str = Field(..., description="The directory structure in tree format")
-
-
-class ChangedFilesResponse(BaseModel):
-    base: str = Field(..., description="Base reference")
-    head: str = Field(..., description="Head reference")
-    files: List[str] = Field(..., description="List of changed file paths")
-
-
-class DiffResponse(BaseModel):
-    base: str = Field(..., description="Base reference")
-    head: str = Field(..., description="Head reference")
-    diff: str = Field(..., description="Git diff content")
-
-
-class CommitInfo(BaseModel):
-    hash: str = Field(..., description="Short commit hash")
-    author: str = Field(..., description="Author name")
-    date: str = Field(..., description="Commit date")
-    subject: str = Field(..., description="Commit message subject")
-
-
-class LogResponse(BaseModel):
-    limit: int = Field(..., description="Number of commits returned")
-    log: List[CommitInfo] = Field(..., description="List of commit logs")
-
-
-class CatResponse(BaseModel):
-    path: str = Field(..., description="File path")
-    content: str = Field(..., description="File content")
-
-
 @app.on_event("startup")
 async def startup_event():
     """Setup environment variables on startup."""
     from pr_guard.cli.utils import setup_env
 
     setup_env()
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get(
@@ -230,3 +194,15 @@ async def chat(request: ChatRequest):
         chat_event_generator(agent, request.message, thread_id),
         media_type="text/event-stream",
     )
+
+
+@app.post(
+    "/create-pr",
+    tags=["GitHub"],
+    summary="Create a new pull request directly by one-tap",
+    description="Creates a new pull request on GitHub.",
+)
+async def create_pr():
+    from pr_guard.utils.tool_utils import _create_pr
+
+    return await _create_pr()
