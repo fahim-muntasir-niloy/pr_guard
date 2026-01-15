@@ -34,10 +34,22 @@ $InstallDir = "$HOME\.pr_guard"
 if (Test-Path $InstallDir) {
     Write-Host "🔄 Updating existing installation in $InstallDir..." -ForegroundColor Yellow
     cd $InstallDir
-    git pull
+    # Ensure we are on master and match origin
+    git checkout master --quiet
+    git fetch origin --quiet
+    git reset --hard origin/master --quiet
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "❌ Failed to update repository. Please check your internet connection or git status." -ForegroundColor Red
+        return
+    }
 } else {
     Write-Host "📥 Cloning PR Guard into $InstallDir..." -ForegroundColor Yellow
     git clone https://github.com/fahim-muntasir-niloy/pr_guard.git $InstallDir
+    cd $InstallDir
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "❌ Failed to clone repository." -ForegroundColor Red
+        return
+    }
 }
 
 # 4. Install Dependencies
@@ -71,7 +83,7 @@ if (Get-Command "code" -ErrorAction SilentlyContinue) {
             
             Write-Host "🍱 Packaging extension..." -ForegroundColor Yellow
             # Use npx to avoid requiring global vsce, and --no-git-check to avoid repo errors
-            npx -y @vscode/vsce package --out pr-guard.vsix --no-git-check
+            npx -y @vscode/vsce package --out pr-guard.vsix
             
             if (Test-Path "pr-guard.vsix") {
                 code --install-extension pr-guard.vsix --force
