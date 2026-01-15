@@ -47,7 +47,9 @@ INSTALL_DIR="$HOME/.pr_guard"
 if [ -d "$INSTALL_DIR" ]; then
     echo -e "\033[0;33m🔄 Updating existing installation in $INSTALL_DIR...\033[0m"
     cd "$INSTALL_DIR"
-    git pull
+    git checkout master --quiet
+    git fetch origin --quiet
+    git reset --hard origin/master --quiet
 else
     echo -e "\033[0;33m📥 Cloning PR Guard into $INSTALL_DIR...\033[0m"
     git clone https://github.com/fahim-muntasir-niloy/pr_guard.git "$INSTALL_DIR"
@@ -92,7 +94,7 @@ if command -v code &> /dev/null; then
             npm run compile --silent
             
             echo -e "\033[0;33m🍱 Packaging extension...\033[0m"
-            npx -y @vscode/vsce package --out pr-guard.vsix --no-git-check
+            npx -y @vscode/vsce package --out pr-guard.vsix
             
             if [ -f "pr-guard.vsix" ]; then
                 code --install-extension pr-guard.vsix --force
