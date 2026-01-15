@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
 import * as path from 'path';
-import { getWebviewContent } from './webviewContent';
+import { getReportHtml } from './view/SimpleReportGenerator';
 import { SidebarProvider } from './SidebarProvider';
 
 let outputChannel: vscode.OutputChannel;
@@ -21,6 +21,25 @@ export function activate(context: vscode.ExtensionContext) {
             sidebarProvider
         )
     );
+
+    // Watch for config/workspace changes
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeWorkspaceFolders(() => {
+            console.log('Workspace folders changed, restarting PR Guard server...');
+            sidebarProvider.restartServer();
+        })
+    );
+    
+    // Also restart if configuration changes (e.g. executable path)
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration((e) => {
+            if (e.affectsConfiguration('prGuard')) {
+                console.log('PR Guard configuration changed, restarting server...');
+                sidebarProvider.restartServer();
+            }
+        })
+    );
+
     sidebarProvider.startServer();
 
     // Command: Review
@@ -32,11 +51,11 @@ export function activate(context: vscode.ExtensionContext) {
             { enableScripts: true }
         );
 
-        panel.webview.html = getWebviewContent("", true);
+        panel.webview.html = getReportHtml("", true);
 
         const commandBase = await getCliCommand();
         if (!commandBase) {
-            panel.webview.html = getWebviewContent("Error: Could not determine PR Guard command.", false);
+            panel.webview.html = getReportHtml("Error: Could not determine PR Guard command.", false);
             return;
         }
 
@@ -48,7 +67,7 @@ export function activate(context: vscode.ExtensionContext) {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
         if (!workspaceFolder) {
             vscode.window.showErrorMessage('No workspace folder open.');
-            panel.webview.html = getWebviewContent("Error: No workspace folder open.", false);
+            panel.webview.html = getReportHtml("Error: No workspace folder open.", false);
             return;
         }
 
@@ -58,10 +77,10 @@ export function activate(context: vscode.ExtensionContext) {
         }, (err, stdout, stderr) => {
             if (err) {
                 vscode.window.showErrorMessage(`PR Guard error: ${err.message}`);
-                panel.webview.html = getWebviewContent(`### Error\n\n\`\`\`\n${stderr || err.message}\n\`\`\``, false);
+                panel.webview.html = getReportHtml(`### Error\n\n\`\`\`\n${stderr || err.message}\n\`\`\``, false);
                 return;
             }
-            panel.webview.html = getWebviewContent(stdout, false);
+            panel.webview.html = getReportHtml(stdout, false);
         });
     });
 
