@@ -91,3 +91,10 @@ class GHCommandInput(BaseModel):
         extra="forbid", json_schema_extra={"additionalProperties": False}
     )
     command: str = Field(description="The GitHub CLI command to execute")
+
+
+class GitCommandInput(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid", json_schema_extra={"additionalProperties": False}
+    )
+    command: str = Field(description="The Git CLI command to execute")

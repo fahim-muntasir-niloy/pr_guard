@@ -2,7 +2,7 @@ import * as MarkdownIt from 'markdown-it';
 
 const md = new MarkdownIt();
 
-export function getWebviewContent(content: string, isLoading: boolean = false): string {
+export function getReportHtml(content: string, isLoading: boolean = false): string {
     const bodyContent = isLoading 
         ? '<div class="loading">Generating AI Review... <span class="loader"></span></div>' 
         : md.render(content);

@@ -5,7 +5,7 @@ exports.deactivate = deactivate;
 const vscode = require("vscode");
 const cp = require("child_process");
 const path = require("path");
-const webviewContent_1 = require("./webviewContent");
+const SimpleReportGenerator_1 = require("./view/SimpleReportGenerator");
 const SidebarProvider_1 = require("./SidebarProvider");
 let outputChannel;
 let sidebarProvider;
@@ -16,14 +16,26 @@ function activate(context) {
     // Register Sidebar Provider
     sidebarProvider = new SidebarProvider_1.SidebarProvider(context.extensionUri, getCliCommand);
     context.subscriptions.push(vscode.window.registerWebviewViewProvider("pr-guard.sidebarView", sidebarProvider));
+    // Watch for config/workspace changes
+    context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        console.log('Workspace folders changed, restarting PR Guard server...');
+        sidebarProvider.restartServer();
+    }));
+    // Also restart if configuration changes (e.g. executable path)
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('prGuard')) {
+            console.log('PR Guard configuration changed, restarting server...');
+            sidebarProvider.restartServer();
+        }
+    }));
     sidebarProvider.startServer();
     // Command: Review
     let reviewDisposable = vscode.commands.registerCommand('pr-guard.review', async () => {
         const panel = vscode.window.createWebviewPanel('prGuardReview', 'PR Guard Review', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = (0, webviewContent_1.getWebviewContent)("", true);
+        panel.webview.html = (0, SimpleReportGenerator_1.getReportHtml)("", true);
         const commandBase = await getCliCommand();
         if (!commandBase) {
-            panel.webview.html = (0, webviewContent_1.getWebviewContent)("Error: Could not determine PR Guard command.", false);
+            panel.webview.html = (0, SimpleReportGenerator_1.getReportHtml)("Error: Could not determine PR Guard command.", false);
             return;
         }
         const fullCommand = `${commandBase} review --plain`.trim();
@@ -33,7 +45,7 @@ function activate(context) {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
         if (!workspaceFolder) {
             vscode.window.showErrorMessage('No workspace folder open.');
-            panel.webview.html = (0, webviewContent_1.getWebviewContent)("Error: No workspace folder open.", false);
+            panel.webview.html = (0, SimpleReportGenerator_1.getReportHtml)("Error: No workspace folder open.", false);
             return;
         }
         cp.exec(finalCommand, {
@@ -42,10 +54,10 @@ function activate(context) {
         }, (err, stdout, stderr) => {
             if (err) {
                 vscode.window.showErrorMessage(`PR Guard error: ${err.message}`);
-                panel.webview.html = (0, webviewContent_1.getWebviewContent)(`### Error\n\n\`\`\`\n${stderr || err.message}\n\`\`\``, false);
+                panel.webview.html = (0, SimpleReportGenerator_1.getReportHtml)(`### Error\n\n\`\`\`\n${stderr || err.message}\n\`\`\``, false);
                 return;
             }
-            panel.webview.html = (0, webviewContent_1.getWebviewContent)(stdout, false);
+            panel.webview.html = (0, SimpleReportGenerator_1.getReportHtml)(stdout, false);
         });
     });
     // Command: Status
