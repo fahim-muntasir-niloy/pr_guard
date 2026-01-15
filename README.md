@@ -2,14 +2,13 @@
 
 **PR Guard** is an advanced, AI-driven code review agent designed to accelerate your development workflow by providing intelligent, automated feedback directly on your Pull Requests. Built for speed, accuracy, and developer happiness.
 
-[![Python Version](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![Python Version](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
 ## 🚀 Quick Start (One-Liner)
-
-Distribute PR Guard to your team with a single command:
+Automate your setup—this command installs the **CLI tool**, sets up your environment, and installs the **VS Code Extension**. It even handles **Node.js** and **UV** installation for you if they are missing.
 
 ### For Windows (PowerShell):
 ```powershell
@@ -36,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/fahim-muntasir-niloy/pr_guard/maste
 ## 🛠️ Installation
 
 ### 1. Requirements
-- Python 3.13+
+- Python 3.12+
 - [uv](https://github.com/astral-sh/uv) (Recommended for speed)
 
 ### 2. Standard Installation
@@ -79,11 +78,14 @@ This will create a `.github/workflows/pr_review.yml` file for you. PR Guard will
 
 ## 🚢 Distribution for Your Office
 
-To roll this out to everyone, we've provided several "Product" entry points:
+To roll this out to everyone, we've provided several entry points:
 
 1. **The CLI**: Best for local pre-commit reviews.
-2. **The Portal**: Run the internal dashboard to see all PR stats.
-3. **The Action**: Enforce code quality across all repositories.
+2. **VS Code Extension**: A premium IDE experience for chat and inline reviews (installed automatically via the one-liner).
+3. **The Portal**: Run the internal dashboard to see all PR stats.
+4. **The Action**: Enforce code quality across all repositories.
+
+> **Note**: For the best experience, ensure your team has [Node.js](https://nodejs.org/) installed so the VS Code extension can be built and installed during the one-liner setup.
 
 ---
 
