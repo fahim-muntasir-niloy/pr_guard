@@ -11,6 +11,12 @@
     "Other"
   ],
   "main": "./out/extension.js",
+  "activationEvents": [
+    "onView:pr-guard.sidebarView",
+    "onCommand:pr-guard.review",
+    "onCommand:pr-guard.chat",
+    "onCommand:pr-guard.status"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [

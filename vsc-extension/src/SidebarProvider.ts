@@ -30,7 +30,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
         // Start the server when sidebar is opened
-        this._startServer();
+        this.startServer();
 
         webviewView.webview.onDidReceiveMessage(async (data) => {
             console.log('Received message from webview:', data);
@@ -65,7 +65,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         this._view = panel;
     }
 
-    private async _startServer() {
+    public async startServer() {
         if (this._serverProcess || this._isServerStarting) {
             return;
         }
@@ -97,26 +97,27 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        // Command to run: pr-guard serve
-        let fullCommand = `${commandBase} serve`;
-        if (process.platform === 'win32' && fullCommand.startsWith('"')) {
-            fullCommand = `& ${fullCommand}`;
+        // Create the full command string
+        let fullCommand = `${commandBase} serve`.trim();
+        
+        // On Windows, if the command has spaces or quotes, PowerShell needs the call operator '&'
+        if (process.platform === 'win32') {
+            const needsCallOperator = commandBase.includes(' ') || commandBase.includes('"') || commandBase.includes("'");
+            if (needsCallOperator && !fullCommand.startsWith('&')) {
+                // Wrap in quotes if not already and prepend &
+                const quotedCmd = commandBase.startsWith('"') ? commandBase : `"${commandBase}"`;
+                fullCommand = `& ${quotedCmd} serve`;
+            }
         }
+        
+        const shellStr = process.platform === 'win32' ? await this._getBestShell() : true;
 
         this._addMessage('system', `🚀 Starting PR Guard Server with: ${fullCommand}`);
 
-        console.log(`Starting server with command: ${fullCommand}`);
-        
-        const shell = process.platform === 'win32' ? 'powershell.exe' : true;
-        
-        // Ensure command is a single string for shell
-        const spawnCommand = process.platform === 'win32' ? fullCommand : commandBase;
-        const spawnArgs = process.platform === 'win32' ? [] : ['serve'];
-
-        const child = cp.spawn(spawnCommand, spawnArgs, {
+        const child = cp.spawn(fullCommand, [], {
             cwd: workspaceFolder,
-            shell: shell,
-            env: { ...process.env, FORCE_COLOR: '0' },
+            shell: shellStr,
+            env: { ...process.env, FORCE_COLOR: '0', PYTHONIOENCODING: 'utf-8' },
             detached: false
         });
 
@@ -484,12 +485,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview) {
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'resources', 'marked.min.js'));
+        const nonce = getNonce();
+
         return `<!DOCTYPE html>
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src http://127.0.0.1:8000;">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+                <script nonce="${nonce}" src="${scriptUri}"></script>
                 <style>
                     :root {
                         --padding: 12px;
@@ -630,7 +635,17 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                         margin-top: 8px;
                         border-radius: 4px;
                     }
-                    .message { margin-bottom: 12px; font-size: 13px; line-height: 1.4; border-radius: 4px; padding: 8px; }
+                    .message { 
+                        margin-bottom: 12px; 
+                        font-size: 13px; 
+                        line-height: 1.4; 
+                        border-radius: 4px; 
+                        padding: 8px; 
+                        word-wrap: break-word; 
+                        overflow-wrap: break-word; 
+                        max-width: 100%;
+                    }
+                    .message img { max-width: 100%; height: auto; }
                     .message.user { background: var(--vscode-button-background); color: var(--vscode-button-foreground); margin-left: 20px; }
                     .message.assistant { background: var(--vscode-editor-lineHighlightBackground); border-left: 3px solid var(--vscode-button-background); }
                     .message.system { font-size: 11px; opacity: 0.7; border-top: 1px solid var(--vscode-panel-border); padding-top: 4px; color: var(--vscode-descriptionForeground); margin-top: 8px; }
@@ -647,12 +662,41 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                         gap: 8px;
                         margin: 4px 0;
                         opacity: 0.9;
+                        word-break: break-all;
                     }
                     .message.tool code { color: var(--vscode-textLink-foreground); }
 
                     /* Markdown Overrides */
-                    .message pre { background: var(--vscode-textCodeBlock-background); padding: 8px; border-radius: 4px; overflow-x: auto; margin: 6px 0; width: 100%; }
-                    .message code { font-family: var(--vscode-editor-font-family); font-size: 12px; }
+                    .message pre { 
+                        background: var(--vscode-textCodeBlock-background); 
+                        padding: 8px; 
+                        border-radius: 4px; 
+                        overflow-x: auto; 
+                        margin: 6px 0; 
+                        width: 100%;
+                        white-space: pre-wrap; 
+                        word-break: break-all;
+                    }
+                    .message code { 
+                        font-family: var(--vscode-editor-font-family); 
+                        font-size: 12px;
+                        word-break: break-word;
+                    }
+
+                    /* List Styling for narrow sidebars */
+                    .message ul, .message ol {
+                        padding-left: 1.5rem;
+                        margin: 0.5rem 0;
+                    }
+                    .message li {
+                        margin-bottom: 0.25rem;
+                    }
+                    .message p {
+                        margin-bottom: 0.5rem;
+                    }
+                    .message p:last-child {
+                        margin-bottom: 0;
+                    }
 
                     .status-bar {
                         padding: 4px 12px;
@@ -678,23 +722,23 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 </div>
                 
                 <div class="tabs">
-                    <button id="tab-commands" class="tab active" onclick="switchTab('commands')">COMMANDS</button>
-                    <button id="tab-chat" class="tab" onclick="switchTab('chat')">CHAT</button>
+                    <button id="tab-commands" class="tab active">COMMANDS</button>
+                    <button id="tab-chat" class="tab">CHAT</button>
                 </div>
                 
                 <div class="main-content">
                     <div id="commands-tab" class="tab-content active" style="overflow-y: auto;">
-                        <button class="collapsible active" onclick="toggleCollapsible(this)">AI Actions</button>
+                        <button class="collapsible active">AI Actions</button>
                         <div class="content-section">
-                            <button class="button" onclick="runCommand('review')">Start Full Code Review</button>
+                            <button id="review-btn" class="button">Start Full Code Review</button>
                         </div>
 
-                        <button class="collapsible active" onclick="toggleCollapsible(this)">Repository Analysis</button>
+                        <button class="collapsible active">Repository Analysis</button>
                         <div class="content-section">
                             <div class="input-group">
                                 <label class="input-label">Project Tree Path</label>
                                 <input type="text" id="tree-path" value="." placeholder="path/to/folder" />
-                                <button class="button secondary" onclick="runTreeWithParams()">Show Structure</button>
+                                <button id="tree-btn" class="button secondary">Show Structure</button>
                             </div>
                             <div class="input-group">
                                 <label class="input-label">Compare Refs (Base...Head)</label>
@@ -703,16 +747,16 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                                     <input type="text" id="ref-head" value="HEAD" placeholder="head" />
                                 </div>
                                 <div style="display:flex; gap:4px;">
-                                    <button class="button secondary" onclick="runChangedWithParams()">Changed Files</button>
-                                    <button class="button secondary" onclick="runDiffWithParams()">Show Diff</button>
+                                    <button id="changed-btn" class="button secondary">Changed Files</button>
+                                    <button id="diff-btn" class="button secondary">Show Diff</button>
                                 </div>
                             </div>
-                            <button class="button secondary" onclick="runCommand('status')">System Status</button>
+                            <button id="status-btn" class="button secondary">System Status</button>
                         </div>
 
                         <div class="header" style="margin-top:12px; background:transparent;">
                             <span>Output</span>
-                            <span style="cursor:pointer; text-decoration:underline;" onclick="clearMessages('commands-output')">Clear</span>
+                            <span id="clear-output-btn" style="cursor:pointer; text-decoration:underline;">Clear</span>
                         </div>
                         <div class="messages-container" id="commands-output">
                             <div class="placeholder">Command output will appear here.</div>
@@ -726,9 +770,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                         <div class="chat-footer">
                             <div class="input-row">
                                 <input type="text" id="chat-input" placeholder="Message PR Guard..." disabled />
-                                <button class="button" id="send-btn" onclick="sendMessage()" style="width: auto;" disabled>Send</button>
+                                <button id="send-btn" class="button" style="width: auto;" disabled>Send</button>
                             </div>
-                            <button class="button secondary" onclick="startChat()" style="font-size: 11px; margin-top:8px;">New Session</button>
+                            <button id="new-session-btn" class="button secondary" style="font-size: 11px; margin-top:8px;">New Session</button>
                         </div>
                     </div>
                 </div>
@@ -737,10 +781,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                     <div id="status-dot" class="status-dot"></div>
                     <span id="status-text">Connecting...</span>
                     <!-- Simplified Reconnect -->
-                    <span onclick="reconnect()" style="color:var(--vscode-textLink-foreground); cursor:pointer; margin-left:auto;">Refresh</span>
+                    <span id="reconnect-btn" style="color:var(--vscode-textLink-foreground); cursor:pointer; margin-left:auto;">Refresh</span>
                 </div>
 
-                <script>
+                <script nonce="${nonce}">
                     (function() {
                         const vscode = acquireVsCodeApi();
                         let isOnline = false;
@@ -748,52 +792,42 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
                         marked.setOptions({ gfm: true, breaks: true });
 
-                        window.toggleCollapsible = function(el) {
-                            el.classList.toggle("active");
-                            const content = el.nextElementSibling;
-                            if (content.style.display === "none") {
-                                content.style.display = "block";
-                            } else {
-                                content.style.display = "none";
-                            }
-                        };
-
-                        window.switchTab = function(tabName) {
+                        const switchTab = (tabName) => {
                             currentTab = tabName;
                             document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-'+tabName));
                             document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === tabName+'-tab'));
                         };
 
-                        window.runCommand = function(command, params = {}) {
+                        const runCommand = (command, params = {}) => {
                             vscode.postMessage({ type: 'runCommand', command, params });
                         };
 
-                        window.runTreeWithParams = function() {
+                        const runTreeWithParams = () => {
                             const path = document.getElementById('tree-path').value;
                             runCommand('getTree', { path });
                         };
 
-                        window.runChangedWithParams = function() {
+                        const runChangedWithParams = () => {
                             const base = document.getElementById('ref-base').value;
                             const head = document.getElementById('ref-head').value;
                             runCommand('getChanged', { base, head });
                         };
 
-                        window.runDiffWithParams = function() {
+                        const runDiffWithParams = () => {
                             const base = document.getElementById('ref-base').value;
                             const head = document.getElementById('ref-head').value;
                             runCommand('getDiff', { base, head });
                         };
 
-                        window.startChat = function() {
+                        const startChat = () => {
                             vscode.postMessage({ type: 'startChat' });
                         };
                         
-                        window.reconnect = function() {
-                             vscode.postMessage({ type: 'startChat' }); // Trigger re-check
+                        const reconnect = () => {
+                             vscode.postMessage({ type: 'startChat' });
                         };
 
-                        window.sendMessage = function() {
+                        const sendMessage = () => {
                             const input = document.getElementById('chat-input');
                             if (input.value.trim()) {
                                 vscode.postMessage({ type: 'sendChatMessage', message: input.value.trim() });
@@ -801,9 +835,34 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                             }
                         };
 
-                        window.clearMessages = function(id) {
-                            document.getElementById(id).innerHTML = '<div class="placeholder">Cleared.</div>';
+                        const clearMessages = (id) => {
+                            const container = document.getElementById(id);
+                            if (container) container.innerHTML = '<div class="placeholder">Cleared.</div>';
                         };
+
+                        // Event Listeners
+                        document.getElementById('tab-commands').addEventListener('click', () => switchTab('commands'));
+                        document.getElementById('tab-chat').addEventListener('click', () => switchTab('chat'));
+                        
+                        document.querySelectorAll('.collapsible').forEach(btn => {
+                            btn.addEventListener('click', function() {
+                                this.classList.toggle("active");
+                                const content = this.nextElementSibling;
+                                if (content) {
+                                    content.style.display = content.style.display === "none" ? "block" : "none";
+                                }
+                            });
+                        });
+
+                        document.getElementById('review-btn').addEventListener('click', () => runCommand('review'));
+                        document.getElementById('tree-btn').addEventListener('click', runTreeWithParams);
+                        document.getElementById('changed-btn').addEventListener('click', runChangedWithParams);
+                        document.getElementById('diff-btn').addEventListener('click', runDiffWithParams);
+                        document.getElementById('status-btn').addEventListener('click', () => runCommand('status'));
+                        document.getElementById('clear-output-btn').addEventListener('click', () => clearMessages('commands-output'));
+                        document.getElementById('send-btn').addEventListener('click', sendMessage);
+                        document.getElementById('new-session-btn').addEventListener('click', startChat);
+                        document.getElementById('reconnect-btn').addEventListener('click', reconnect);
 
                         function addMessage(type, content) {
                             const containerId = currentTab === 'chat' ? 'chat-messages' : 'commands-output';
@@ -884,4 +943,27 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             </body>
             </html>`;
     }
+
+    private async _getBestShell(): Promise<string | boolean> {
+        if (process.platform !== 'win32') return true;
+        
+        return new Promise((resolve) => {
+            cp.exec('pwsh -Command "$PSVersionTable.PSVersion.Major"', (err) => {
+                if (!err) {
+                    resolve('pwsh.exe');
+                } else {
+                    resolve('powershell.exe');
+                }
+            });
+        });
+    }
+}
+
+function getNonce() {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
 }

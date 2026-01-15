@@ -21,6 +21,7 @@ export function activate(context: vscode.ExtensionContext) {
             sidebarProvider
         )
     );
+    sidebarProvider.startServer();
 
     // Command: Review
     let reviewDisposable = vscode.commands.registerCommand('pr-guard.review', async () => {
@@ -69,8 +70,14 @@ export function activate(context: vscode.ExtensionContext) {
         runCommandInOutputChannel('status', 'Checking Status...');
     });
 
+    // Command: Chat (Focus Sidebar)
+    let chatDisposable = vscode.commands.registerCommand('pr-guard.chat', () => {
+        vscode.commands.executeCommand('pr-guard.sidebarView.focus');
+    });
+
     context.subscriptions.push(reviewDisposable);
     context.subscriptions.push(statusDisposable);
+    context.subscriptions.push(chatDisposable);
 }
 
 export function deactivate() {
@@ -126,9 +133,15 @@ async function getCliCommand(): Promise<string | null> {
 
     // 1. Explicit 'pr-guard' executable configuration
     if (executablePath && executablePath.trim().length > 0) {
-        commandBase = `"${executablePath}"`;
+        commandBase = executablePath.trim();
     } 
-    // 2. Check workspace-local .venv (Windows)
+
+    // 2. Check global command (Recommended)
+    if (!commandBase && await checkCommand('pr-guard --version')) {
+        commandBase = 'pr-guard';
+    }
+
+    // 3. Check workspace-local .venv (Windows)
     if (!commandBase && process.platform === 'win32') {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (workspaceFolders) {
@@ -140,7 +153,7 @@ async function getCliCommand(): Promise<string | null> {
         }
     }
 
-    // 3. Check standard installation location (Windows)
+    // 4. Check standard installation location (Windows)
     if (!commandBase && process.platform === 'win32') {
         const homeDir = os.homedir();
         const standardPath = path.join(homeDir, '.pr_guard', '.venv', 'Scripts', 'pr-guard.exe');
@@ -151,15 +164,13 @@ async function getCliCommand(): Promise<string | null> {
         }
     }
 
-    // 4. Fallback: try global command
-    if (!commandBase && await checkCommand(process.platform === 'win32' ? 'powershell -Command "pr-guard --version"' : 'pr-guard --version')) {
-        commandBase = 'pr-guard';
-    }
-
     // 5. Fallback: try as Python module
     if (!commandBase && await checkCommand('python -m pr_guard --version')) {
         commandBase = 'python -m pr_guard';
     }
+
+    console.log(`PR Guard Command Detected: ${commandBase || 'None'}`);
+    
     // 5. Last resort: return null to show error
     if (!commandBase) {
         return null;
@@ -169,10 +180,27 @@ async function getCliCommand(): Promise<string | null> {
     return commandBase;
 }
 
-function checkCommand(cmd: string): Promise<boolean> {
+async function checkCommand(cmd: string): Promise<boolean> {
+    const shellStr = process.platform === 'win32' ? await getBestShell() : undefined;
+    const options: cp.ExecOptions = shellStr ? { shell: shellStr } : {};
+    
     return new Promise((resolve) => {
-        cp.exec(cmd, (err) => {
+        cp.exec(cmd, options, (err) => {
             resolve(!err);
+        });
+    });
+}
+
+async function getBestShell(): Promise<string> {
+    if (process.platform !== 'win32') return '/bin/sh';
+    
+    return new Promise((resolve) => {
+        cp.exec('pwsh -Command "$PSVersionTable.PSVersion.Major"', (err) => {
+            if (!err) {
+                resolve('pwsh.exe');
+            } else {
+                resolve('powershell.exe');
+            }
         });
     });
 }
