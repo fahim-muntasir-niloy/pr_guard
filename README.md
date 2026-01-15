@@ -2,7 +2,7 @@
 
 **PR Guard** is an advanced, AI-driven code review agent designed to accelerate your development workflow by providing intelligent, automated feedback directly on your Pull Requests. Built for speed, accuracy, and developer happiness.
 
-[![Python Version](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![Python Version](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---

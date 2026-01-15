@@ -8,7 +8,7 @@ echo "---------------------------------------"
 
 # 1. Check for Python
 if ! command -v python3 &> /dev/null; then
-    echo -e "\033[0;31m❌ python3 not found. Please install Python 3.13+ first.\033[0m"
+    echo -e "\033[0;31m❌ python3 not found. Please install Python 3.12+ first.\033[0m"
     exit 1
 fi
 
@@ -88,8 +88,8 @@ if command -v code &> /dev/null; then
         (
             cd "$INSTALL_DIR/vsc-extension"
             echo -e "\033[0;33m📦 Building extension...\033[0m"
-            npm install --quiet
-            npm run compile --quiet
+            npm install --silent
+            npm run compile --silent
             
             echo -e "\033[0;33m🍱 Packaging extension...\033[0m"
             npx -y @vscode/vsce package --out pr-guard.vsix --no-git-check

@@ -6,7 +6,7 @@ Write-Host "---------------------------------------"
 
 # 1. Check for Python
 if (-not (Get-Command "python" -ErrorAction SilentlyContinue)) {
-    Write-Host "❌ Python not found. Please install Python 3.13+ first." -ForegroundColor Red
+    Write-Host "❌ Python not found. Please install Python 3.12+ first." -ForegroundColor Red
     return
 }
 
@@ -66,8 +66,8 @@ if (Get-Command "code" -ErrorAction SilentlyContinue) {
         try {
             cd "$InstallDir\vsc-extension"
             Write-Host "📦 Building extension..." -ForegroundColor Yellow
-            npm install --quiet
-            npm run compile --quiet
+            npm install --silent
+            npm run compile --silent
             
             Write-Host "🍱 Packaging extension..." -ForegroundColor Yellow
             # Use npx to avoid requiring global vsce, and --no-git-check to avoid repo errors
