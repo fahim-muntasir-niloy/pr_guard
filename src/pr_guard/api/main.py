@@ -1,6 +1,6 @@
 from fastapi.responses import StreamingResponse
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.middleware import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from pr_guard.api.utils import review_event_generator, chat_event_generator
 from pr_guard.schema.api_schema import (
     ChatRequest,
