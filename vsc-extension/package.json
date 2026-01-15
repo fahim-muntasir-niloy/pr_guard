@@ -4,6 +4,10 @@
   "description": "VS Code extension for PR Guard CLI",
   "version": "0.0.1",
   "publisher": "pr-guard",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fahim-muntasir-niloy/pr_guard.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -22,12 +26,7 @@
       "activitybar": [
         {
           "id": "pr-guard-sidebar",
-  "main": "./out/extension.js",
-  "activationEvents": [
-    "onView:pr-guard.sidebarView",
-    "onCommand:pr-guard.review",
-    "onCommand:pr-guard.status"
-  ],
+          "title": "PR Guard",
           "icon": "resources/icon.svg"
         }
       ]
