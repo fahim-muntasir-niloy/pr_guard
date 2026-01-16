@@ -1,7 +1,8 @@
 import httpx
 import sys
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Set
 import os
+import re
 
 
 async def post_github_review(
@@ -54,13 +55,71 @@ async def post_github_review(
                     )
 
 
+def parse_diff_for_valid_lines(diff_text: str) -> Dict[str, Set[int]]:
+    """
+    Parse a unified diff and return valid line numbers per file.
+    Returns: {"path/to/file.py": {10, 11, 12, ...}}
+    """
+    valid_lines = {}
+    current_file = None
+    current_line = 0
+
+    for line in diff_text.split("\n"):
+        # New file marker
+        if line.startswith("+++ b/"):
+            current_file = line[6:]  # Remove '+++ b/'
+            valid_lines[current_file] = set()
+            continue
+
+        # Hunk header: @@ -old_start,old_count +new_start,new_count @@
+        if line.startswith("@@"):
+            match = re.match(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@", line)
+            if match:
+                current_line = int(match.group(1))
+            continue
+
+        if current_file is None:
+            continue
+
+        # Track line numbers for additions and context
+        if line.startswith("+") and not line.startswith("+++"):
+            valid_lines[current_file].add(current_line)
+            current_line += 1
+        elif line.startswith("-") and not line.startswith("---"):
+            # Deletions don't increment new file line numbers
+            pass
+        elif not line.startswith("\\"):  # Context line (not "\ No newline")
+            valid_lines[current_file].add(current_line)
+            current_line += 1
+
+    return valid_lines
+
+
+async def get_pr_diff(repo: str, pr_number: int, token: str) -> str:
+    """Fetch the PR diff from GitHub."""
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github.diff",
+    }
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"https://api.github.com/repos/{repo}/pulls/{pr_number}", headers=headers
+        )
+        resp.raise_for_status()
+        return resp.text
+
+
 def build_github_review_payload(
     review_dict: Dict[str, Any],
+    valid_lines: Dict[str, Set[int]] = None,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """
     Builds:
     1) A PR review payload (summary + inline diff comments)
     2) A list of file-level PR comments (fallback for comments without line info)
+
+    If valid_lines is provided, filters out comments on lines not in the diff.
     """
 
     inline_comments: List[Dict[str, Any]] = []
@@ -72,28 +131,45 @@ def build_github_review_payload(
         if comment.get("suggestion"):
             body += f"\n\n```suggestion\n{comment['suggestion']}\n```"
 
-        if comment.get("line") is not None:
-            inline_comments.append(
-                {
-                    "path": comment["path"],
-                    "line": comment["line"],
-                    "side": comment.get("side", "RIGHT"),
-                    "body": body,
-                }
+        path = comment["path"]
+        line = comment.get("line")
+
+        # Check if line is valid (in the diff)
+        if line is not None:
+            is_valid = valid_lines is None or (
+                path in valid_lines and line in valid_lines[path]
             )
+
+            if is_valid:
+                inline_comments.append(
+                    {
+                        "path": path,
+                        "line": line,
+                        "side": comment.get("side", "RIGHT"),
+                        "body": body,
+                    }
+                )
+            else:
+                # Convert to file-level comment if line not in diff
+                file_level_comments.append(
+                    {
+                        "path": path,
+                        "body": f"**Line {line}**\n\n{body}",
+                    }
+                )
         else:
             file_level_comments.append(
                 {
-                    "path": comment["path"],
+                    "path": path,
                     "body": body,
                 }
             )
 
     review_payload = {
-        "event": review_dict["event"],  # APPROVE | REQUEST_CHANGES | COMMENT
+        "event": review_dict["event"],
         "body": review_dict["body"],
-        "comments": inline_comments,  # may be empty, that's OK
-        "commit_id": os.getenv("GITHUB_SHA"),  # From GitHub Action
+        "comments": inline_comments,
+        "commit_id": os.getenv("GITHUB_SHA"),
     }
 
     return review_payload, file_level_comments

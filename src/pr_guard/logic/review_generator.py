@@ -5,7 +5,11 @@ import sys
 from typing import Any, Dict
 from pr_guard.agent import init_review_agent
 from pr_guard.config import settings
-from pr_guard.utils.github_utils import build_github_review_payload
+from pr_guard.utils.github_utils import (
+    build_github_review_payload,
+    get_pr_diff,
+    parse_diff_for_valid_lines,
+)
 
 
 def setup_env():
@@ -26,6 +30,21 @@ async def generate_github_review_payload() -> Dict[str, Any]:
     setup_env()
     agent = await init_review_agent()
 
+    # Get PR info from environment
+    repo = os.getenv("GITHUB_REPOSITORY")
+    pr_number = int(os.getenv("PR_NUMBER", "0"))
+    token = os.getenv("GITHUB_TOKEN")
+
+    # Fetch and parse diff to get valid line numbers
+    valid_lines = None
+    if repo and pr_number and token:
+        try:
+            diff_text = await get_pr_diff(repo, pr_number, token)
+            valid_lines = parse_diff_for_valid_lines(diff_text)
+            print(f"Parsed valid lines from diff: {valid_lines}", file=sys.stderr)
+        except Exception as e:
+            print(f"Warning: Could not fetch diff for validation: {e}", file=sys.stderr)
+
     res = await agent.ainvoke(
         {
             "messages": [
@@ -37,8 +56,9 @@ async def generate_github_review_payload() -> Dict[str, Any]:
 1. **Summary Review**: Concise overall assessment (2-3 sentences) for this PR only. Include whether it should be APPROVED, REQUEST_CHANGES, or COMMENT.
 
 2. **Inline Comments**: For each issue:
-   - Specify the exact line number in the modified file
-   - Indicate side: "RIGHT" (new/modified) or "LEFT" (deleted)
+   - **CRITICAL**: Only comment on lines that are visible in the diff below (lines starting with + or -)
+   - For additions/modifications, use side="RIGHT" and the line number from the NEW file (after the change)
+   - For deletions, use side="LEFT" and the line number from the OLD file (before the change)
    - Give clear, actionable feedback
    - Include code suggestion if applicable
    - Rate severity: blocker, major, minor, nit
@@ -52,7 +72,6 @@ async def generate_github_review_payload() -> Dict[str, Any]:
    - Incomplete or inconsistent implementations
 
 Be specific, constructive, and cite code references. Prioritize critical issues.
-
                     """,
                 }
             ]
@@ -62,7 +81,9 @@ Be specific, constructive, and cite code references. Prioritize critical issues.
     review_data = res["structured_response"]
     review_dict = review_data.model_dump()
 
-    review_payload, file_level_comments = build_github_review_payload(review_dict)
+    review_payload, file_level_comments = build_github_review_payload(
+        review_dict, valid_lines
+    )
 
     return {
         "review": review_payload,
