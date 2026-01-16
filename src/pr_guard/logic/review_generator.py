@@ -19,7 +19,7 @@ def setup_env():
 async def generate_github_review_payload() -> Dict[str, Any]:
     """
     Runs the AI agent and prepares GitHub-ready payloads:
-    - PR review payload (summary + inline comments)
+    - PR review payload (summary + inline comments with line+side)
     - File-level fallback comments
     """
 
@@ -31,7 +31,29 @@ async def generate_github_review_payload() -> Dict[str, Any]:
             "messages": [
                 {
                     "role": "user",
-                    "content": "Execute a pre-merge code review for the latest git commits.",
+                    "content": """
+                    You are a senior code reviewer. Analyze the git diff of this pull request and provide:
+
+                    1. **Summary Review**: A concise overall assessment of the changes (2-3 sentences). 
+                    Include whether this should be APPROVED, needs REQUEST_CHANGES, or warrants a COMMENT.
+
+                    2. **Inline Comments**: For each issue, concern, or improvement opportunity:
+                    - Specify the exact line number in the modified file where the comment applies
+                    - Indicate which side: "RIGHT" for new/modified lines, "LEFT" for deleted lines
+                    - Provide clear, actionable feedback
+                    - Include a code suggestion if applicable
+                    - Rate severity: info, warning, or error
+
+                    3. **Focus Areas**:
+                    - Logic correctness and potential bugs
+                    - Code quality, maintainability, and style
+                    - Performance implications
+                    - Security vulnerabilities
+                    - Missing error handling
+                    - Incomplete or inconsistent implementations
+
+                    Be specific, constructive, and cite code references. Prioritize critical issues.
+                    """,
                 }
             ]
         }

@@ -1,6 +1,7 @@
 import httpx
 import sys
 from typing import Any, Dict, List, Tuple
+import os
 
 
 async def post_github_review(
@@ -59,7 +60,7 @@ def build_github_review_payload(
     """
     Builds:
     1) A PR review payload (summary + inline diff comments)
-    2) A list of file-level PR comments (fallback)
+    2) A list of file-level PR comments (fallback for comments without line info)
     """
 
     inline_comments: List[Dict[str, Any]] = []
@@ -71,11 +72,12 @@ def build_github_review_payload(
         if comment.get("suggestion"):
             body += f"\n\n```suggestion\n{comment['suggestion']}\n```"
 
-        if comment.get("position") is not None:
+        if comment.get("line") is not None:
             inline_comments.append(
                 {
                     "path": comment["path"],
-                    "position": comment["position"],
+                    "line": comment["line"],
+                    "side": comment.get("side", "RIGHT"),
                     "body": body,
                 }
             )
@@ -91,6 +93,7 @@ def build_github_review_payload(
         "event": review_dict["event"],  # APPROVE | REQUEST_CHANGES | COMMENT
         "body": review_dict["body"],
         "comments": inline_comments,  # may be empty, that's OK
+        "commit_id": os.getenv("GITHUB_SHA"),  # From GitHub Action
     }
 
     return review_payload, file_level_comments

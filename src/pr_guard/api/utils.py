@@ -35,7 +35,7 @@ async def review_event_generator(agent) -> AsyncGenerator[str, None]:
 
 
 async def chat_event_generator(
-    agent, message: str, thread_id: str = str(uuid.uuid4())
+    agent, message: str, thread_id: str
 ) -> AsyncGenerator[str, None]:
     """
     Generator for chat events (tools and tokens).
