@@ -1,7 +1,6 @@
 import json
 from typing import AsyncGenerator
 from langchain.messages import AIMessageChunk
-import uuid
 from pr_guard.cli.utils import token_processor
 
 

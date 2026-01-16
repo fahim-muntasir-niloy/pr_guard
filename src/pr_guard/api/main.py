@@ -47,7 +47,7 @@ async def app_exception_handler(request: Request, exc: Exception):
     logger.error(f"{exc.__class__.__name__}: {exc}")
     return JSONResponse(
         status_code=500,
-        content={"error": str(exc)},
+        content={"error": "Internal server error"},
     )
 
 
