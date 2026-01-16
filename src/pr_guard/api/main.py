@@ -1,18 +1,19 @@
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi import Request
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pr_guard.api.utils import review_event_generator, chat_event_generator
 from pr_guard.schema.api_schema import (
     ChatRequest,
-    GitStatus,
+    ChatPullRequest,
     StatusResponse,
     TreeResponse,
     ChangedFilesResponse,
     DiffResponse,
-    CommitInfo,
     LogResponse,
     CatResponse,
 )
+from pr_guard.cli.logging_config import setup_logger
 
 app = FastAPI(
     title="PR Guard API",
@@ -23,6 +24,8 @@ app = FastAPI(
 
 @app.on_event("startup")
 async def startup_event():
+    setup_logger()
+
     """Setup environment variables on startup."""
     from pr_guard.cli.utils import setup_env
 
@@ -36,6 +39,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def app_exception_handler(request: Request, exc: Exception):
+    logger = setup_logger()
+    logger.error(f"{exc.__class__.__name__}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal server error"},
+    )
 
 
 @app.get(
@@ -182,7 +195,8 @@ async def review():
     "/chat",
     tags=["AI"],
     summary="Chat with PR Guard (Streaming)",
-    description="Starts a streaming chat session with the PR Guard assistant. Yields tokens and tool calls as SSE events.",
+    description="""Starts a streaming chat session with the PR Guard assistant. 
+    Yields tokens and tool calls as SSE events.""",
 )
 async def chat(request: ChatRequest):
     import uuid
@@ -197,12 +211,48 @@ async def chat(request: ChatRequest):
 
 
 @app.post(
-    "/create-pr",
+    "/one-click-pr",
     tags=["GitHub"],
     summary="Create a new pull request directly by one-tap",
     description="Creates a new pull request on GitHub.",
 )
-async def create_pr():
-    from pr_guard.utils.tool_utils import _create_pr
+async def one_click_pr(request: ChatPullRequest):
+    import uuid
+    from pr_guard.agent import one_click_pr_agent
 
-    return await _create_pr()
+    user_instructions = request.user_instructions
+    base = request.base
+    head = request.head
+
+    message = f"""
+    You are an automated GitHub Pull Request generator.
+
+    Your task is to create a new pull request based ONLY on the provided commit history.
+
+    Rules:
+    - Take into account the user instructions provided -> {user_instructions}.
+    - First take pull in both {base} and {head} branches
+    - Summarize only the commits included in this pull request.
+    - Ignore any commits that happened before the last merge commit.
+    - Do not invent changes or features.
+    - Be concise and technical.
+    - Use clear bullet points for changes.
+    - If no meaningful changes exist, say so explicitly.
+
+    Output format:
+    Title: <short, descriptive PR title>
+    PR url: <url to the pull request>
+
+    PR description:
+    - <bullet point summary of changes>
+
+    Breaking changes:
+    - <bullet point summary of breaking changes>
+
+    Do not include explanations, disclaimers, or markdown outside this format.
+    """
+    agent = await one_click_pr_agent()
+    return StreamingResponse(
+        chat_event_generator(agent, message, thread_id=str(uuid.uuid4())),
+        media_type="text/event-stream",
+    )

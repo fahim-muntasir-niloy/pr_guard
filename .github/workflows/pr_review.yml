@@ -26,36 +26,113 @@ jobs:
           enable-cache: true
 
       - name: Set up Python
-        run: uv python install
+        run: uv python install 3.13
 
       - name: Generate PR review payload
         id: generate
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          # Use the head SHA of the PR so comments map to the right version
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -e
           PYTHONPATH=src uv run src/pr_guard/logic/review_generator.py > review_payload.json
           echo "Review payload generated:"
           jq . review_payload.json
 
-      - name: Post PR review (summary + inline comments)
+      - name: Validate review payload
+        run: |
+          set -e
+          echo "Validating payload structure..."
+          jq '.review | has("event") and has("body") and has("comments")' review_payload.json | grep -q true || {
+            echo "ERROR: Invalid review payload structure"
+            jq . review_payload.json
+            exit 1
+          }
+          echo "✓ Payload validation passed"
+
+      - name: Post PR review (Summary Only)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
+          COMMIT_ID: ${{ github.event.pull_request.head.sha }}
         run: |
           set -e
 
-          REVIEW_BODY=$(jq '.review' review_payload.json)
+          # Extract only the top-level review info (Event + Body)
+          # Posting comments via the Reviews API often causes 422 errors due to line mapping.
+          # We post the review first, then the comments individually.
+          REVIEW_DATA=$(jq -n \
+            --arg body "$(jq -r '.review.body' review_payload.json)" \
+            --arg event "$(jq -r '.review.event' review_payload.json)" \
+            --arg commit_id "$COMMIT_ID" \
+            '{body: $body, event: $event, commit_id: $commit_id}')
 
-          echo "Posting PR review..."
-          curl -sS -X POST \
+          echo "Posting Review Summary (Event: $(jq -r '.review.event' review_payload.json))..."
+          
+          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -H "Content-Type: application/json" \
             "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/reviews" \
-            -d "$REVIEW_BODY"
+            -d "$REVIEW_DATA")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+
+          if [[ $HTTP_CODE -ge 200 && $HTTP_CODE -lt 300 ]]; then
+            echo "✓ Review summary posted successfully (HTTP $HTTP_CODE)"
+          else
+            echo "✗ Failed to post review summary (HTTP $HTTP_CODE)"
+            echo "$BODY" | jq .
+            exit 1
+          fi
+
+      - name: Post Inline Comments
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          COMMIT_ID: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -e
+          
+          INLINE_COUNT=$(jq '.review.comments | length' review_payload.json)
+          if [[ $INLINE_COUNT -eq 0 ]]; then
+            echo "No inline comments to post."
+            exit 0
+          fi
+
+          echo "Posting $INLINE_COUNT inline comments..."
+
+          # We iterate through each comment and post it to the /comments endpoint.
+          # This is more robust than the /reviews endpoint for line+side mapping.
+          jq -c '.review.comments[]' review_payload.json | while read -r comment; do
+            # Merge individual comment with the commit_id
+            PAYLOAD=$(echo "$comment" | jq -c --arg sha "$COMMIT_ID" '. + {commit_id: $sha}')
+            
+            echo "Posting comment on $(echo "$comment" | jq -r .path) line $(echo "$comment" | jq -r .line)..."
+            
+            RESP=$(curl -sS -w "\n%{http_code}" -X POST \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/comments" \
+              -d "$PAYLOAD")
+            
+            CODE=$(echo "$RESP" | tail -n1)
+            if [[ $CODE -ge 200 && $CODE -lt 300 ]]; then
+              echo "  ✓ Success"
+            else
+              echo "  ✗ Failed (HTTP $CODE). Check if the line number is actually in the PR diff."
+              echo "$RESP" | head -n-1 | jq .
+              # We don't exit 1 here so that other valid comments can still be posted
+            fi
+          done
 
       - name: Post file-level PR comments (fallback)
         if: always()
@@ -67,13 +144,34 @@ jobs:
           set -e
 
           COUNT=$(jq '.file_comments | length' review_payload.json)
+          
+          if [[ $COUNT -eq 0 ]]; then
+            echo "No file-level comments to post"
+            exit 0
+          fi
+
           echo "Posting $COUNT file-level comments..."
 
           jq -c '.file_comments[]' review_payload.json | while read -r comment; do
-            curl -sS -X POST \
+            RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST \
               -H "Authorization: Bearer $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               -H "Content-Type: application/json" \
-              "https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/comments" \
-              -d "$comment"
+              "https://api.github.com/repos/$REPO/issues/$PR_NUMBER/comments" \
+              -d "$(echo "$comment" | jq -c '{body: ("**File: " + .path + "**\n\n" + .body)}')")
+
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            if [[ $HTTP_CODE -lt 200 || $HTTP_CODE -ge 300 ]]; then
+              echo "✗ Failed to post file comment (HTTP $HTTP_CODE)"
+              exit 1
+            fi
           done
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## PR Review Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Event:** $(jq -r '.review.event' review_payload.json)" >> $GITHUB_STEP_SUMMARY
+          echo "**Inline Comments:** $(jq '.review.comments | length' review_payload.json)" >> $GITHUB_STEP_SUMMARY
+          echo "**File Comments:** $(jq '.file_comments | length' review_payload.json)" >> $GITHUB_STEP_SUMMARY

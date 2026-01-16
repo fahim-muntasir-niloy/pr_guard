@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal, List, Optional
 
 
@@ -9,13 +9,14 @@ Severity = Literal["blocker", "major", "minor", "nit"]
 class InlineComment(BaseModel):
     """
     Inline PR review comment for GitHub's Reviews API.
+    Uses modern line + side approach (position is deprecated).
     """
 
     model_config = ConfigDict(extra="forbid")
 
     path: str
-    position: int  # diff hunk index (1-based, mandatory for Reviews API)
-    side: Literal["LEFT", "RIGHT"] = "RIGHT"  # which side of the diff
+    line: int  # absolute line number in the changed file
+    side: Literal["LEFT", "RIGHT"] = "RIGHT"  # LEFT for deletions, RIGHT for additions
     body: str  # explanation (no code here)
     severity: Severity  # internal severity tracking
     suggestion: Optional[str] = None  # raw code suggestion
@@ -32,4 +33,7 @@ class GitHubPRReview(BaseModel):
 
     event: ReviewEvent
     body: str  # top-level review comment
-    comments: List[InlineComment]
+    comments: list[InlineComment]
+    commit_id: Optional[str] = Field(
+        default=None, description="SHA of the commit (anchors line+side resolution)"
+    )

@@ -21,6 +21,7 @@ from pr_guard.utils.tool_utils import (
     _read_file_cat,
 )
 
+
 console = Console()
 
 
@@ -282,40 +283,6 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Build Check (Auto-detect)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          BUILD_LOG=build_error.log
-          SUCCESS=0
-          if [ -f "package.json" ]; then
-            echo "📦 Detected Node.js project"
-            npm install && npm run build --if-present > $BUILD_LOG 2>&1 || SUCCESS=$?
-          elif [ -f "go.mod" ]; then
-            echo "🐹 Detected Go project"
-            go build ./... > $BUILD_LOG 2>&1 || SUCCESS=$?
-          elif [ -f "Cargo.toml" ]; then
-            echo "🦀 Detected Rust project"
-            cargo build > $BUILD_LOG 2>&1 || SUCCESS=$?
-          elif [ -f "pyproject.toml" ] || [ -f "requirements.txt" ] || [ -f "setup.py" ]; then
-            echo "🐍 Detected Python project"
-            uv sync > $BUILD_LOG 2>&1 || SUCCESS=$?
-          elif ls *.sln 1> /dev/null 2>&1 || ls *.csproj 1> /dev/null 2>&1; then
-            echo "🎯 Detected .NET project"
-            dotnet build > $BUILD_LOG 2>&1 || SUCCESS=$?
-          fi
-
-          if [ "$SUCCESS" -ne 0 ]; then
-            echo "❌ Compilation failed"
-            ERROR_MSG=$(tail -n 30 $BUILD_LOG)
-            gh pr comment ${{ github.event.pull_request.number }} --body "### ❌ Compilation Failed
-            PR Guard could not build the project. Please fix the following errors to enable AI review:
-
-            ```text
-            $ERROR_MSG
-            ```"
-            exit $SUCCESS
-          fi
 
       - name: Run PR Guard Review
         env:
