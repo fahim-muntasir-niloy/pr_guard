@@ -102,24 +102,25 @@ class ApiClient {
             }
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
-            let accumulatedData = '';
+            let buffer = '';
             this._callbacks.onMessage('assistant', 'Starting review...');
             while (true) {
                 const { done, value } = await reader.read();
                 if (done)
                     break;
                 const chunk = decoder.decode(value, { stream: true });
-                accumulatedData += chunk;
-                const lines = accumulatedData.split('\n');
-                accumulatedData = lines.pop() || '';
-                for (const line of lines) {
-                    const cleanLine = line.trim();
-                    if (cleanLine.startsWith('data: ')) {
-                        const dataStr = cleanLine.substring(6);
+                buffer += chunk;
+                let endIndex;
+                while ((endIndex = buffer.indexOf('\n\n')) !== -1) {
+                    const message = buffer.substring(0, endIndex);
+                    buffer = buffer.substring(endIndex + 2);
+                    if (message.startsWith('data: ')) {
+                        const dataStr = message.substring(6);
                         try {
                             const data = JSON.parse(dataStr);
                             if (data.type === 'tool_call') {
-                                this._callbacks.onMessage('tool', data.name);
+                                const toolInfo = data.args ? `${data.name}: ${JSON.stringify(data.args)}` : data.name;
+                                this._callbacks.onMessage('tool', toolInfo);
                             }
                             else if (data.type === 'report') {
                                 const reportHtml = this._formatReviewReport(data.content);
@@ -130,7 +131,7 @@ class ApiClient {
                             }
                         }
                         catch (e) {
-                            // Partial JSON
+                            // Invalid JSON
                         }
                     }
                 }
@@ -162,20 +163,20 @@ class ApiClient {
             }
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
-            let accumulatedData = '';
+            let buffer = '';
             let started = false;
             while (true) {
                 const { done, value } = await reader.read();
                 if (done)
                     break;
                 const chunk = decoder.decode(value, { stream: true });
-                accumulatedData += chunk;
-                const lines = accumulatedData.split('\n');
-                accumulatedData = lines.pop() || '';
-                for (const line of lines) {
-                    const cleanLine = line.trim();
-                    if (cleanLine.startsWith('data: ')) {
-                        const dataStr = cleanLine.substring(6);
+                buffer += chunk;
+                let endIndex;
+                while ((endIndex = buffer.indexOf('\n\n')) !== -1) {
+                    const message = buffer.substring(0, endIndex);
+                    buffer = buffer.substring(endIndex + 2);
+                    if (message.startsWith('data: ')) {
+                        const dataStr = message.substring(6);
                         try {
                             const data = JSON.parse(dataStr);
                             if (data.type === 'token') {
@@ -188,11 +189,73 @@ class ApiClient {
                                 }
                             }
                             else if (data.type === 'tool_call') {
-                                this._callbacks.onMessage('tool', data.name);
+                                const toolInfo = data.args ? `${data.name}: ${JSON.stringify(data.args)}` : data.name;
+                                this._callbacks.onMessage('tool', toolInfo);
                             }
                         }
                         catch (e) {
-                            // Partial JSON
+                            // Invalid JSON
+                        }
+                    }
+                }
+            }
+        }
+        catch (error) {
+            this._callbacks.onMessage('system', `❌ Error: ${error.message}`);
+        }
+    }
+    async createOneClickPR(userInstructions, base = 'master', head = 'HEAD') {
+        this._callbacks.onMessage('system', '🚀 Creating one-click PR via API...');
+        try {
+            const response = await fetch(`${this._apiBaseUrl}/one-click-pr`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_instructions: userInstructions,
+                    base,
+                    head
+                })
+            });
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}`);
+            }
+            if (!response.body) {
+                throw new Error('No response body');
+            }
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let started = false;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done)
+                    break;
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+                let endIndex;
+                while ((endIndex = buffer.indexOf('\n\n')) !== -1) {
+                    const message = buffer.substring(0, endIndex);
+                    buffer = buffer.substring(endIndex + 2);
+                    if (message.startsWith('data: ')) {
+                        const dataStr = message.substring(6);
+                        try {
+                            const data = JSON.parse(dataStr);
+                            if (data.type === 'token') {
+                                if (!started) {
+                                    this._callbacks.onMessage('assistant', data.content);
+                                    started = true;
+                                }
+                                else {
+                                    this._callbacks.onAppend(data.content);
+                                }
+                            }
+                            else if (data.type === 'tool_call') {
+                                const toolInfo = data.args ? `${data.name}: ${JSON.stringify(data.args)}` : data.name;
+                                this._callbacks.onMessage('tool', toolInfo);
+                            }
+                        }
+                        catch (e) {
+                            // Invalid JSON
                         }
                     }
                 }
@@ -207,25 +270,32 @@ class ApiClient {
             return content;
         try {
             const report = content;
-            let md = `## AI Review Report\n\n`;
-            md += `**Result:** ${report.event || 'COMPLETED'}\n\n`;
-            md += `${report.body || ''}\n\n`;
-            if (report.comments && Array.isArray(report.comments)) {
-                md += `### Detailed Comments\n\n`;
-                report.comments.forEach((c) => {
-                    md += `#### 📝 ${c.path} (line ${c.position})\n`;
+            let md = `# 🤖 AI Code Review Report\n\n`;
+            md += `## 📊 Summary\n\n`;
+            md += `**Status:** ${report.event || 'COMPLETED'}\n\n`;
+            md += `${report.body || 'Review completed successfully.'}\n\n`;
+            if (report.comments && Array.isArray(report.comments) && report.comments.length > 0) {
+                md += `## 🔍 Detailed Findings\n\n`;
+                report.comments.forEach((c, index) => {
+                    const severityIcon = c.severity === 'error' ? '❌' : c.severity === 'warning' ? '⚠️' : 'ℹ️';
+                    md += `### ${index + 1}. ${severityIcon} ${c.path} (line ${c.position})\n\n`;
                     md += `**Severity:** ${c.severity || 'info'}\n\n`;
                     md += `${c.body}\n\n`;
                     if (c.suggestion) {
-                        md += `**Suggestion:**\n\`\`\`\n${c.suggestion}\n\`\`\`\n\n`;
+                        md += `**💡 Suggested Fix:**\n\`\`\`\n${c.suggestion}\n\`\`\`\n\n`;
                     }
                     md += `---\n\n`;
                 });
             }
+            else {
+                md += `## ✅ No Issues Found\n\n`;
+                md += `Great job! No critical issues were identified in this review.\n\n`;
+            }
+            md += `---\n\n*Generated by PR Guard AI Assistant*`;
             return md;
         }
         catch (e) {
-            return JSON.stringify(content, null, 2);
+            return `## 🤖 AI Review Report\n\n${JSON.stringify(content, null, 2)}`;
         }
     }
 }

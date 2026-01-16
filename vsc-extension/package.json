@@ -19,7 +19,8 @@
     "onView:pr-guard.sidebarView",
     "onCommand:pr-guard.review",
     "onCommand:pr-guard.chat",
-    "onCommand:pr-guard.status"
+    "onCommand:pr-guard.status",
+    "onCommand:pr-guard.oneClickPR"
   ],
   "contributes": {
     "viewsContainers": {
@@ -52,6 +53,10 @@
       {
         "command": "pr-guard.status",
         "title": "PR Guard: Status"
+      },
+      {
+        "command": "pr-guard.oneClickPR",
+        "title": "PR Guard: Create One Click PR"
       }
     ],
     "configuration": {

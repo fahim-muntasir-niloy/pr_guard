@@ -231,7 +231,8 @@ async def one_click_pr(request: ChatPullRequest):
 
     Rules:
     - Take into account the user instructions provided -> {user_instructions}.
-    - First take pull in both {base} and {head} branches
+    - First check if there is already a PR open between {base} and {head}. If so, respond with the existing PR details only.
+    - Take pull in both {base} and {head} branches
     - Summarize only the commits included in this pull request.
     - Ignore any commits that happened before the last merge commit.
     - Do not invent changes or features.

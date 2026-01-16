@@ -150,6 +150,20 @@ def version():
 
 
 @app.command()
+def pr(
+    user_instructions: str = typer.Option(
+        ..., "--instructions", "-i", help="User instructions for PR"
+    ),
+    base: str = typer.Option("master", "--base", "-b", help="Base branch"),
+    head: str = typer.Option("HEAD", "--head", "-h", help="Head branch"),
+):
+    """
+    Create a one-click pull request.
+    """
+    asyncio.run(run_one_click_pr(user_instructions, base, head))
+
+
+@app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", "--host", help="Host to bind the server to"),
     port: int = typer.Option(8000, "--port", help="Port to bind the server to"),

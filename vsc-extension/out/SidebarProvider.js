@@ -112,6 +112,10 @@ class SidebarProvider {
             await this._apiClient.runDiff(params);
             return;
         }
+        if (subCommand === 'oneClickPR') {
+            await this._apiClient.createOneClickPR(params.userInstructions, params.base, params.head);
+            return;
+        }
         console.log(`Running generic command: ${subCommand}`);
     }
     _addMessage(type, content) {
