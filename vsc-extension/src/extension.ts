@@ -89,6 +89,69 @@ export function activate(context: vscode.ExtensionContext) {
         runCommandInOutputChannel('status', 'Checking Status...');
     });
 
+    // Command: One Click PR
+    let oneClickPRDisposable = vscode.commands.registerCommand('pr-guard.oneClickPR', async () => {
+        const userInstructions = await vscode.window.showInputBox({
+            prompt: 'Enter user instructions for the PR',
+            placeHolder: 'e.g., Add new feature for user authentication'
+        });
+        if (!userInstructions) return;
+
+        const base = await vscode.window.showInputBox({
+            prompt: 'Enter base branch',
+            placeHolder: 'master',
+            value: 'master'
+        });
+        if (base === undefined) return;
+
+        const head = await vscode.window.showInputBox({
+            prompt: 'Enter head branch',
+            placeHolder: 'HEAD',
+            value: 'HEAD'
+        });
+        if (head === undefined) return;
+
+        const panel = vscode.window.createWebviewPanel(
+            'prGuardOneClickPR',
+            'PR Guard One Click PR',
+            vscode.ViewColumn.One,
+            { enableScripts: true }
+        );
+
+        panel.webview.html = getReportHtml("", true);
+
+        // For now, run via CLI, but ideally via API if server is running
+        const commandBase = await getCliCommand();
+        if (!commandBase) {
+            panel.webview.html = getReportHtml("Error: Could not determine PR Guard command.", false);
+            return;
+        }
+
+        const fullCommand = `${commandBase} pr --instructions "${userInstructions}" --base ${base} --head ${head}`.trim();
+        const finalCommand = (process.platform === 'win32' && fullCommand.startsWith('"'))
+            ? `& ${fullCommand}`
+            : fullCommand;
+
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
+        if (!workspaceFolder) {
+            vscode.window.showErrorMessage('No workspace folder open.');
+            panel.webview.html = getReportHtml("Error: No workspace folder open.", false);
+            return;
+        }
+
+        cp.exec(finalCommand, { 
+            cwd: workspaceFolder,
+            shell: process.platform === 'win32' ? 'powershell.exe' : '/bin/sh'
+        }, (err, stdout, stderr) => {
+            if (err) {
+                vscode.window.showErrorMessage(`PR Guard error: ${err.message}`);
+                panel.webview.html = getReportHtml(`### Error\n\n\`\`\`\n${stderr || err.message}\n\`\`\``, false);
+                return;
+            }
+            panel.webview.html = getReportHtml(stdout, false);
+        });
+    });
+
     // Command: Chat (Focus Sidebar)
     let chatDisposable = vscode.commands.registerCommand('pr-guard.chat', () => {
         vscode.commands.executeCommand('pr-guard.sidebarView.focus');
@@ -96,6 +159,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(reviewDisposable);
     context.subscriptions.push(statusDisposable);
+    context.subscriptions.push(oneClickPRDisposable);
     context.subscriptions.push(chatDisposable);
 }
 
