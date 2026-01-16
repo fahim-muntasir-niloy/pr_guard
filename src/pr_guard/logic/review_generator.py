@@ -41,7 +41,7 @@ async def generate_github_review_payload() -> Dict[str, Any]:
    - Indicate side: "RIGHT" (new/modified) or "LEFT" (deleted)
    - Give clear, actionable feedback
    - Include code suggestion if applicable
-   - Rate severity: info, warning, error
+   - Rate severity: blocker, major, minor, nit
 
 3. **Focus Areas**:
    - Logic correctness and potential bugs
