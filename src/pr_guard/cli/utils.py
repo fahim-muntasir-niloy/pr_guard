@@ -293,6 +293,7 @@ jobs:
           GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
           GITHUB_BASE_REF: ${{ github.base_ref }}
           GITHUB_HEAD_REF: ${{ github.head_ref }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha }}
         run: uvx --from git+https://github.com/fahim-muntasir-niloy/pr_guard.git pr-guard review --github
 """
 
