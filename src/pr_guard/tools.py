@@ -120,8 +120,8 @@ async def get_list_of_changed_files() -> dict[str, list[str]]:
     base, head = _get_review_range()
     files = _run_git_command(["diff", "--name-only", f"{base}...{head}"])
 
-    if len(files.splitlines()) > 50:
-        return "Too many files changed."
+    # if len(files.splitlines()) > 50:
+    #     return "Too many files changed."
 
     return {"files": files.splitlines()}
 

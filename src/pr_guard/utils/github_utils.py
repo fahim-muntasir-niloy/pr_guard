@@ -24,21 +24,67 @@ async def post_github_review(
     base_url = f"https://api.github.com/repos/{repo}/pulls/{pr_number}"
 
     async with httpx.AsyncClient() as client:
-        # 1. Post the main review (summary + inline comments)
-        print(f" Posting PR review to {repo} #{pr_number}...")
+        # 1. Post the main review (summary only, NO inline comments in payload)
+        print(f"📝 Posting PR review to {repo} #{pr_number}...")
+
+        summary_payload = {
+            "event": review_payload.get("event"),
+            "body": review_payload.get("body"),
+            "commit_id": review_payload.get("commit_id"),
+        }
+
         res = await client.post(
-            f"{base_url}/reviews", headers=headers, json=review_payload
+            f"{base_url}/reviews", headers=headers, json=summary_payload
         )
+
         if res.status_code not in (200, 201):
             print(
-                f"Error posting review: {res.status_code} - {res.text}", file=sys.stderr
+                f"❌ Error posting review: {res.status_code} - {res.text}",
+                file=sys.stderr,
             )
         else:
-            print("Main review posted successfully.")
+            print("✅ Main review posted successfully.")
 
-        # 2. Post file-level comments (if any)
+        # 2. Post inline comments individually using line+side
+        inline_comments = review_payload.get("comments", [])
+        if inline_comments:
+            print(f"💬 Posting {len(inline_comments)} inline comments...")
+            commit_id = review_payload.get("commit_id") or os.getenv("GITHUB_SHA")
+
+            for comment in inline_comments:
+                payload = {
+                    "path": comment["path"],
+                    "body": comment["body"],
+                    "line": comment["line"],
+                    "side": comment.get("side", "RIGHT"),
+                    "commit_id": commit_id,
+                }
+
+                resp = await client.post(
+                    f"{base_url}/comments", headers=headers, json=payload
+                )
+
+                if resp.status_code not in (200, 201):
+                    print(
+                        f"⚠️  Failed to post inline comment on {comment['path']}:{comment['line']} "
+                        f"(HTTP {resp.status_code}). Line may not be in diff.",
+                        file=sys.stderr,
+                    )
+                    print(f"   Response: {resp.text}", file=sys.stderr)
+
+                    # Optional: Convert to file-level comment as fallback
+                    fallback_body = f"**{comment['path']} (line {comment['line']})**\n\n{comment['body']}"
+                    fallback_res = await client.post(
+                        f"https://api.github.com/repos/{repo}/issues/{pr_number}/comments",
+                        headers=headers,
+                        json={"body": fallback_body},
+                    )
+                    if fallback_res.status_code in (200, 201):
+                        print("✅ Posted as file-level comment instead")
+
+        # 3. Post file-level comments (if any)
         if file_comments:
-            print(f" Posting {len(file_comments)} file-level comments...")
+            print(f"📄 Posting {len(file_comments)} file-level comments...")
             for comment in file_comments:
                 comment_body = (
                     f"**File: {comment.get('path')}**\n\n{comment.get('body')}"
@@ -50,9 +96,11 @@ async def post_github_review(
                 )
                 if res.status_code not in (200, 201):
                     print(
-                        f"Error posting comment for {comment.get('path')}: {res.status_code} - {res.text}",
+                        f"❌ Error posting comment for {comment.get('path')}: {res.status_code} - {res.text}",
                         file=sys.stderr,
                     )
+                else:
+                    print("✅ Posted comment for {comment.get('path')}")
 
 
 def parse_diff_for_valid_lines(diff_text: str) -> Dict[str, Set[int]]:

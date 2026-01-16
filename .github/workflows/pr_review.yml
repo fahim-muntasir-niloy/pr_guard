@@ -26,7 +26,7 @@ jobs:
           enable-cache: true
 
       - name: Set up Python
-        run: uv python install 3.13.11
+        run: uv python install 3.13
 
       - name: Generate PR review payload
         id: generate
@@ -35,6 +35,8 @@ jobs:
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
           # Use the head SHA of the PR so comments map to the right version
           GITHUB_SHA: ${{ github.event.pull_request.head.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -e
           PYTHONPATH=src uv run src/pr_guard/logic/review_generator.py > review_payload.json

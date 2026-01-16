@@ -12,21 +12,27 @@ def setup_logger():
     formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 
     # File (persistent)
-    file_handler = logging.FileHandler("pr_guard.log")
-    file_handler.setLevel(logging.ERROR)
-    file_handler.setFormatter(formatter)
+    file_handler = None
 
-    # Console (clean)
+    try:
+        file_handler = logging.FileHandler(".pr_guard/pr_guard.log")
+        file_handler.setLevel(logging.ERROR)
+        file_handler.setFormatter(formatter)
+    except Exception:
+        pass
+
+    # Console handler (developer visibility)
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
 
-    logger.addHandler(file_handler)
+    if file_handler:
+        logger.addHandler(file_handler)
     logger.addHandler(console_handler)
 
-    # Silence uvicorn noise
-    logging.getLogger("uvicorn").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    # Uvicorn logging hygiene
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)  # framework noise
+    logging.getLogger("uvicorn.error").setLevel(logging.INFO)  # errors + startup
+    logging.getLogger("uvicorn.access").setLevel(logging.INFO)  # HTTP requests
 
     return logger
