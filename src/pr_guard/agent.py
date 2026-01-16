@@ -31,3 +31,15 @@ async def chat_agent():
         checkpointer=InMemorySaver(),
     )
     return agent
+
+
+async def one_click_pr_agent():
+    agent = create_agent(
+        tools=TOOLS,
+        model=llm,
+        system_prompt="You are an automated GitHub Pull Request generator. You dont ask questions, just do what is told to you.",
+        # middleware=[ToolCallLimitMiddleware(run_limit=5)],
+        name="PR_Guard_Agent",
+        checkpointer=InMemorySaver(),
+    )
+    return agent

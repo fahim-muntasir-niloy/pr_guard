@@ -1,6 +1,7 @@
 import json
 from typing import AsyncGenerator
 from langchain.messages import AIMessageChunk
+import uuid
 from pr_guard.cli.utils import token_processor
 
 
@@ -34,7 +35,7 @@ async def review_event_generator(agent) -> AsyncGenerator[str, None]:
 
 
 async def chat_event_generator(
-    agent, message: str, thread_id: str
+    agent, message: str, thread_id: str = str(uuid.uuid4())
 ) -> AsyncGenerator[str, None]:
     """
     Generator for chat events (tools and tokens).

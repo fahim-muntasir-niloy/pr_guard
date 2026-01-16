@@ -9,6 +9,12 @@ class ChatRequest(BaseModel):
     )
 
 
+class ChatPullRequest(BaseModel):
+    user_instructions: str = Field(..., description="User instructions")
+    base: str = Field(..., description="Base reference")
+    head: str = Field(..., description="Head reference")
+
+
 class GitStatus(BaseModel):
     branch: str = Field(..., description="Current git branch")
     last_commit: str = Field(..., description="Last commit hash and subject")
