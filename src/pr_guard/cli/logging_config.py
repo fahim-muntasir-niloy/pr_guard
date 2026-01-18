@@ -1,5 +1,6 @@
 # pr_guard/utils/logger.py
 import logging
+from pathlib import Path
 
 
 def setup_logger():
@@ -14,8 +15,13 @@ def setup_logger():
     # File (persistent)
     file_handler = None
 
+    log_dir = Path(".pr_guard")
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    log_file = log_dir / "error.log"
+
     try:
-        file_handler = logging.FileHandler(".pr_guard/pr_guard.log")
+        file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(logging.ERROR)
         file_handler.setFormatter(formatter)
     except Exception:
