@@ -79,54 +79,40 @@ body {
     display: flex;
 }
 
-/* Minimal Collapsible Sections */
+/* Minimal Actions Layout */
 #commands-tab {
-    padding: 4px;
+    padding: 8px;
     overflow-y: auto;
+    gap: 12px;
 }
 
-.collapsible {
-    background: transparent;
-    color: var(--vscode-foreground);
-    cursor: pointer;
-    padding: 8px 10px;
+.actions-group {
+    border: 1px solid var(--vscode-widget-border);
+    border-radius: var(--border-radius);
+    padding: 8px;
+    margin-bottom: 8px;
+}
+
+.action-item {
+    margin-bottom: 8px;
+}
+.action-item:last-child {
+    margin-bottom: 0;
+}
+
+.collapsible-toggle {
     width: 100%;
-    border: none;
-    text-align: left;
-    outline: none;
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    letter-spacing: 0.8px;
-    opacity: 0.7;
-    border-radius: 3px;
-    transition: all 0.15s ease;
+}
+.collapsible-content {
+    display: none;
+    padding: 8px;
+    margin-top: 8px;
+    background: var(--vscode-textCodeBlock-background);
+    border-radius: var(--border-radius);
 }
 
-.collapsible:hover {
-    opacity: 1;
-    background: var(--vscode-toolbar-hoverBackground);
-}
-
-.collapsible:after {
-    content: '\\25B8'; /* Small arrow */
-    font-size: 10px;
-    margin-left: auto;
-    transition: transform 0.15s ease;
-    opacity: 0.6;
-}
-
-.collapsible.active:after {
-    transform: rotate(90deg);
-}
-
-.content-section {
-    padding: 2px 0 8px 0;
+.collapsible.active .collapsible-content {
     display: block;
-    text-align: center;
 }
 
 /* Minimal Form Elements */
@@ -281,8 +267,29 @@ input[type="text"]:focus {
 }
 
 .message.tool::before {
-    content: '⚡';
-    font-size: 10px;
+    content: '';
+}
+
+.tool-call {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.tool-icon {
+    font-size: 14px;
+}
+
+.tool-args {
+    font-family: var(--vscode-editor-font-family);
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    padding: 4px;
+    background: var(--vscode-textCodeBlock-background);
+    border-radius: 3px;
 }
 
 /* Markdown Overrides */
@@ -478,38 +485,55 @@ input[type="text"]:focus {
     display: none;
 }
 
-/* Normal Output Section */
-#commands-output {
-    background: var(--vscode-editor-background);
-    color: var(--vscode-editor-foreground);
-    font-family: var(--vscode-font-family), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-    font-size: 14px;
-    /* border: 1px solid var(--vscode-panel-border); */
+/* Output Container */
+.output-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--vscode-widget-border);
     border-radius: var(--border-radius);
-    padding: var(--padding);
-    overflow-y: auto;
-    white-space: pre-wrap;
-    word-wrap: break-word;
+    min-height: 150px; /* Ensure it has some height */
 }
-
-#commands-output .message {
-    color: var(--vscode-editor-foreground);
-    margin-bottom: 4px;
-}
-
-#commands-output .message.tool {
-    color: var(--vscode-textLink-foreground);
-}
-
-#commands-output .message.system {
+.output-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    background: var(--vscode-textCodeBlock-background);
+    border-bottom: 1px solid var(--vscode-widget-border);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
     color: var(--text-secondary);
-    text-align: center;
 }
-
-#commands-output .message.assistant {
-    color: var(--vscode-editor-foreground);
+.output-header .action-icon {
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0.7;
+    transition: opacity 0.15s ease;
 }
-
+.output-header .action-icon:hover {
+    opacity: 1;
+}
+.output-container .placeholder,
 #commands-output .placeholder {
+    padding: 12px;
     color: var(--text-secondary);
+    font-size: 12px;
+}
+#commands-output {
+    padding: 8px;
+    overflow-y: auto;
+    font-size: 13px;
+    flex: 1;
+}
+
+.action-icon {
+    cursor: pointer;
+    opacity: 0.8;
+    font-size: 13px;
+    transition: opacity 0.15s ease;
+}
+.action-icon:hover {
+    opacity: 1;
 }
