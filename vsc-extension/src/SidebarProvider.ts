@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { TextEncoder } from 'util';
 import { ServerManager } from './services/ServerManager';
 import { ApiClient } from './api/ApiClient';
 import { WebviewContent } from './view/WebviewContent';
@@ -92,6 +93,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 }
                 case 'stopChat': {
                     this._setChatActive(false);
+                    break;
+                }
+                case 'saveReport': {
+                    this._saveReport(data.content);
                     break;
                 }
             }
@@ -190,6 +195,24 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 type: 'setChatActive',
                 active: active
             });
+        }
+    }
+
+    private async _saveReport(content: string) {
+        if (vscode.workspace.workspaceFolders) {
+            const uri = await vscode.window.showSaveDialog({
+                defaultUri: vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, 'pr-guard-report.md'),
+                filters: {
+                    'Markdown': ['md']
+                }
+            });
+
+            if (uri) {
+                await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(content));
+                vscode.window.showInformationMessage('Report saved successfully!');
+            }
+        } else {
+            vscode.window.showErrorMessage('Please open a workspace to save the report.');
         }
     }
 }
