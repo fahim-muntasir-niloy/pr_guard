@@ -15,6 +15,7 @@ from pr_guard.cli.utils import (
     run_cat,
     run_version,
     run_serve,
+    run_one_click_pr,
 )
 
 app = typer.Typer(

@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SidebarProvider = void 0;
+const vscode = require("vscode");
+const util_1 = require("util");
 const ServerManager_1 = require("./services/ServerManager");
 const ApiClient_1 = require("./api/ApiClient");
 const WebviewContent_1 = require("./view/WebviewContent");
@@ -72,6 +74,10 @@ class SidebarProvider {
                 }
                 case 'stopChat': {
                     this._setChatActive(false);
+                    break;
+                }
+                case 'saveReport': {
+                    this._saveReport(data.content);
                     break;
                 }
             }
@@ -157,6 +163,23 @@ class SidebarProvider {
                 type: 'setChatActive',
                 active: active
             });
+        }
+    }
+    async _saveReport(content) {
+        if (vscode.workspace.workspaceFolders) {
+            const uri = await vscode.window.showSaveDialog({
+                defaultUri: vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, 'pr-guard-report.md'),
+                filters: {
+                    'Markdown': ['md']
+                }
+            });
+            if (uri) {
+                await vscode.workspace.fs.writeFile(uri, new util_1.TextEncoder().encode(content));
+                vscode.window.showInformationMessage('Report saved successfully!');
+            }
+        }
+        else {
+            vscode.window.showErrorMessage('Please open a workspace to save the report.');
         }
     }
 }

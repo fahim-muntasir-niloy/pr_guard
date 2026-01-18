@@ -113,13 +113,9 @@
     document.getElementById('tab-commands').addEventListener('click', () => switchTab('commands'));
     document.getElementById('tab-chat').addEventListener('click', () => switchTab('chat'));
 
-    document.querySelectorAll('.collapsible').forEach(btn => {
+    document.querySelectorAll('.collapsible-toggle').forEach(btn => {
         btn.addEventListener('click', function() {
-            this.classList.toggle("active");
-            const content = this.nextElementSibling;
-            if (content) {
-                content.style.display = content.style.display === "none" ? "block" : "none";
-            }
+            this.parentElement.classList.toggle("active");
         });
     });
 
@@ -129,6 +125,11 @@
     document.getElementById('status-btn').addEventListener('click', () => runCommand('status'));
     document.getElementById('one-click-pr-btn').addEventListener('click', runOneClickPRWithParams);
     document.getElementById('clear-output-btn').addEventListener('click', () => clearMessages('commands-output'));
+    document.getElementById('save-report-btn').addEventListener('click', () => {
+        const reportMessages = document.querySelectorAll('#commands-output .message.assistant');
+        const reportContent = Array.from(reportMessages).map(msg => msg.getAttribute('data-raw')).join('\n\n');
+        vscode.postMessage({ type: 'saveReport', content: reportContent });
+    });
     document.getElementById('send-btn').addEventListener('click', sendMessage);
     document.getElementById('new-session-btn').addEventListener('click', startChat);
     document.getElementById('reconnect-btn').addEventListener('click', reconnect);
@@ -171,13 +172,21 @@
         div.className = 'message ' + type;
 
         if (type === 'tool') {
+            const icons = {
+                'File': 'file-code', 'Git': 'git-commit', 'Code': 'code',
+                'Shell': 'terminal', 'Human': 'person', 'Unknown': 'question'
+            };
             const parts = content.split(': ', 2);
-            const toolName = parts[0] || content;
+            const toolName = parts[0] || 'Unknown';
             const toolArgs = parts[1] || '';
-            div.innerHTML = `<div style="background: #f0f0f0; border-left: 4px solid #ccc; padding: 8px; margin: 4px 0; font-family: monospace; font-size: 11px; border-radius: 4px;">
-                <strong>Tool Call:</strong> ${toolName}<br>
-                <strong>Args:</strong> <code>${toolArgs}</code>
-            </div>`;
+            const icon = icons[toolName] || icons['Unknown'];
+            div.innerHTML = `
+                <div class="tool-call">
+                    <span class="tool-icon"><i class="codicon codicon-${icon}"></i></span>
+                    <span class="tool-name">${toolName}</span>
+                </div>
+                <div class="tool-args">${toolArgs}</div>
+            `;
         } else if (type === 'assistant' || type === 'system') {
             div.setAttribute('data-raw', content);
             div.innerHTML = marked.parse(content);
