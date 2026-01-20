@@ -262,9 +262,6 @@ async def run_init():
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    branches:
-      - master
-      - main
 
 jobs:
   review:
