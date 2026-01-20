@@ -8,7 +8,6 @@ from pr_guard.model import llm
 from pr_guard.tools import (
     TOOLS,
     execute_git_operations,
-    execute_github_command,
     gh_pr_create,
 )
 from pr_guard.schema.response import GitHubPRReview
@@ -40,7 +39,7 @@ async def chat_agent():
 
 async def one_click_pr_agent():
     agent = create_agent(
-        tools=[execute_git_operations, execute_github_command, gh_pr_create],
+        tools=[execute_git_operations, gh_pr_create],
         model=llm,
         system_prompt=one_click_pr_prompt,
         # middleware=[ToolCallLimitMiddleware(run_limit=5)],
