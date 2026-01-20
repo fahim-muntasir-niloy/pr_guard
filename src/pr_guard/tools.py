@@ -167,9 +167,44 @@ async def gh_pr_create(
 ) -> str:
     """
     Creates a GitHub Pull Request using the 'gh' CLI.
+    Checks if a PR already exists, syncs branches, then creates PR.
     Always ask for the branch names of base and head,
     if not clearly provided.
     """
+    # 1. Check if PR already exists
+    check_cmd = ["gh", "pr", "list", "--json", "url", "--state", "open"]
+    if head:
+        check_cmd.extend(["--head", head])
+    if base:
+        check_cmd.extend(["--base", base])
+
+    try:
+        output = _run_shell_command(check_cmd)
+        if output and output.strip():
+            prs = json.loads(output)
+            if prs:
+                return f"A Pull Request already exists: {prs[0]['url']}"
+    except Exception:
+        pass
+
+    # 2. Sync branches
+    _run_shell_command(["git", "fetch", "origin"])
+
+    current_branch = _run_shell_command(["git", "branch", "--show-current"]).strip()
+
+    if base:
+        if base == current_branch:
+            _run_shell_command(["git", "pull", "origin", base])
+        else:
+            _run_shell_command(["git", "fetch", "origin", f"{base}:{base}"])
+
+    if head:
+        if head == current_branch:
+            _run_shell_command(["git", "pull", "origin", head])
+        else:
+            _run_shell_command(["git", "fetch", "origin", f"{head}:{head}"])
+
+    # 3. Create PR
     cmd = ["gh", "pr", "create", "--title", title, "--body", body]
     if base:
         cmd.extend(["--base", base])
@@ -233,7 +268,7 @@ TOOLS = [
     # get_git_log,
     search_code_grep,
     # list_changed_files_between_branches,
-    # gh_pr_create,
+    gh_pr_create,
     # gh_pr_view,
     execute_github_command,
     execute_git_operations,

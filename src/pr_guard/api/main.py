@@ -225,32 +225,13 @@ async def one_click_pr(request: ChatPullRequest):
     head = request.head
 
     message = f"""
-    You are an automated GitHub Pull Request generator.
+    Create a Pull Request with the following details:
+    - Base branch: {base or "automatic detection"}
+    - Head branch: {head or "current branch"}
+    - User instructions: {user_instructions if user_instructions else "None"}
 
-    Your task is to create a new pull request based ONLY on the provided commit history.
-
-    Rules:
-    - Take into account the user instructions provided -> {user_instructions}.
-    - First check if there is already a PR open between {base} and {head}. If so, respond with the existing PR details only.
-    - Take pull in both {base} and {head} branches
-    - Summarize only the commits included in this pull request.
-    - Ignore any commits that happened before the last merge commit.
-    - Do not invent changes or features.
-    - Be concise and technical.
-    - Use clear bullet points for changes.
-    - If no meaningful changes exist, say so explicitly.
-
-    Output format:
-    Title: <short, descriptive PR title>
-    PR url: <url to the pull request>
-
-    PR description:
-    - <bullet point summary of changes>
-
-    Breaking changes:
-    - <bullet point summary of breaking changes>
-
-    Do not include explanations, disclaimers, or markdown outside this format.
+    Remember to only include changes from the {head} branch relative to the {base} branch, 
+    focusing on commits since the last merge.
     """
     agent = await one_click_pr_agent()
     return StreamingResponse(

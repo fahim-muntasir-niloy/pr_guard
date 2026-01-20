@@ -137,8 +137,11 @@ export class ApiClient {
                         try {
                             const data = JSON.parse(dataStr);
                             if (data.type === 'tool_call') {
-                                const toolInfo = data.args ? `${data.name}: ${JSON.stringify(data.args)}` : data.name;
-                                this._callbacks.onMessage('tool', toolInfo);
+                                const toolPayload = JSON.stringify({ 
+                                    name: data.name, 
+                                    args: data.args || {} 
+                                });
+                                this._callbacks.onMessage('tool', toolPayload);
                             } else if (data.type === 'report') {
                                 const reportHtml = this._formatReviewReport(data.content);
                                 this._callbacks.onMessage('assistant', reportHtml);
@@ -209,8 +212,11 @@ export class ApiClient {
                                     this._callbacks.onAppend(data.content);
                                 }
                             } else if (data.type === 'tool_call') {
-                                const toolInfo = data.args ? `${data.name}: ${JSON.stringify(data.args)}` : data.name;
-                                this._callbacks.onMessage('tool', toolInfo);
+                                const toolPayload = JSON.stringify({ 
+                                    name: data.name, 
+                                    args: data.args || {} 
+                                });
+                                this._callbacks.onMessage('tool', toolPayload);
                             }
                         } catch (e) {
                             // Invalid JSON
@@ -274,8 +280,11 @@ export class ApiClient {
                                     this._callbacks.onAppend(data.content);
                                 }
                             } else if (data.type === 'tool_call') {
-                                const toolInfo = data.args ? `${data.name}: ${JSON.stringify(data.args)}` : data.name;
-                                this._callbacks.onMessage('tool', toolInfo);
+                                const toolPayload = JSON.stringify({ 
+                                    name: data.name, 
+                                    args: data.args || {} 
+                                });
+                                this._callbacks.onMessage('tool', toolPayload);
                             }
                         } catch (e) {
                             // Invalid JSON
