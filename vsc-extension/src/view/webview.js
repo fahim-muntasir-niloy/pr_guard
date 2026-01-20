@@ -109,6 +109,55 @@
         }
     };
 
+    const updateBranchSelects = (branches) => {
+        const base = document.getElementById('pr-base');
+        const head = document.getElementById('pr-head');
+        
+        // Preserve current selections if possible
+        const baseVal = base.value;
+        const headVal = head.value;
+
+        [base, head].forEach(sel => {
+            sel.innerHTML = '';
+            // Add HEAD option manually for head branch selection (common use case)
+            if (sel.id === 'pr-head') {
+                 const optHead = document.createElement('option');
+                 optHead.value = 'HEAD';
+                 optHead.innerText = 'HEAD (Current)';
+                 sel.appendChild(optHead);
+            }
+
+            branches.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b;
+                opt.innerText = b;
+                sel.appendChild(opt);
+            });
+        });
+
+        if (baseVal && Array.from(base.options).some(o => o.value === baseVal)) base.value = baseVal;
+        else {
+            if (branches.includes('main')) base.value = 'main';
+            else if (branches.includes('master')) base.value = 'master';
+        }
+
+         if (headVal && Array.from(head.options).some(o => o.value === headVal)) head.value = headVal;
+    };
+
+    const loadBranches = async () => {
+        try {
+            const res = await fetch('http://127.0.0.1:8000/branches');
+            if (res.ok) {
+                const data = await res.json();
+                if (data.branches) {
+                    updateBranchSelects(data.branches);
+                }
+            }
+        } catch (e) {
+            console.log('Server not ready for branches yet', e);
+        }
+    };
+
     // Event Listeners
     document.getElementById('tab-commands').addEventListener('click', () => switchTab('commands'));
     document.getElementById('tab-chat').addEventListener('click', () => switchTab('chat'));
@@ -133,6 +182,18 @@
     document.getElementById('send-btn').addEventListener('click', sendMessage);
     document.getElementById('new-session-btn').addEventListener('click', startChat);
     document.getElementById('reconnect-btn').addEventListener('click', reconnect);
+    
+    const refreshBtn = document.getElementById('refresh-branches');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            loadBranches();
+        });
+    }
+
+    // Initial load
+    setTimeout(loadBranches, 1000); // Wait a sec for server to potentially start
+    setInterval(loadBranches, 10000); // Poll occasionally
 
     function addMessage(type, content, context) {
         // If context is provided, use it to select container.
@@ -172,20 +233,56 @@
         div.className = 'message ' + type;
 
         if (type === 'tool') {
-            const icons = {
-                'File': 'file-code', 'Git': 'git-commit', 'Code': 'code',
-                'Shell': 'terminal', 'Human': 'person', 'Unknown': 'question'
+            // Map common tools to nice icons
+            const toolMap = {
+                'execute_git_operations': { icon: 'git-branch', label: 'Git Operation' },
+                'execute_github_command': { icon: 'github', label: 'GitHub CLI' },
+                'read_file_cat': { icon: 'file-code', label: 'Read File' },
+                'list_files_tree': { icon: 'list-tree', label: 'List Files' },
+                'search_code_grep': { icon: 'search', label: 'Search Code' },
+                'get_diff_of_single_file': { icon: 'diff', label: 'Diff File' },
+                'default': { icon: 'tools', label: 'Tool Call' }
             };
-            const parts = content.split(': ', 2);
-            const toolName = parts[0] || 'Unknown';
-            const toolArgs = parts[1] || '';
-            const icon = icons[toolName] || icons['Unknown'];
+
+            // Robust splitting: standard tool calls come as "ToolName: {json...}"
+            // but sometimes just "ToolName" or "ToolName: "
+            let toolName = 'Unknown';
+            let toolArgs = '{}';
+
+            const firstColonIndex = content.indexOf(':');
+            if (firstColonIndex !== -1) {
+                toolName = content.substring(0, firstColonIndex).trim();
+                toolArgs = content.substring(firstColonIndex + 1).trim();
+            } else {
+                toolName = content.trim();
+            }
+            
+            // Try pretty print JSON
+            try {
+                // If args is empty string, default empty dict
+                if (!toolArgs) toolArgs = '{}';
+                const parsed = JSON.parse(toolArgs);
+                toolArgs = JSON.stringify(parsed, null, 2);
+            } catch (e) {
+                // If not valid JSON, keep as is
+            }
+
+            const info = toolMap[toolName] || toolMap['default'];
+
             div.innerHTML = `
-                <div class="tool-call">
-                    <span class="tool-icon"><i class="codicon codicon-${icon}"></i></span>
-                    <span class="tool-name">${toolName}</span>
+                <div class="tool-card">
+                    <div class="tool-header" onclick="this.parentElement.classList.toggle('expanded')">
+                        <div class="tool-icon"><i class="codicon codicon-${info.icon}"></i></div>
+                        <div class="tool-name">${info.label}: <span style="font-weight:normal; opacity:0.8">${toolName}</span></div>
+                        <div class="tool-status">
+                            <span>Executed</span>
+                            <i class="codicon codicon-chevron-right tool-toggle-icon"></i>
+                        </div>
+                    </div>
+                    <div class="tool-details">
+                        <div class="tool-args-block">${toolArgs}</div>
+                    </div>
                 </div>
-                <div class="tool-args">${toolArgs}</div>
             `;
         } else if (type === 'assistant' || type === 'system') {
             div.setAttribute('data-raw', content);
@@ -254,8 +351,8 @@
                 document.getElementById('status-text').innerText = isOnline ? 'Ready' : 'Offline';
                 break;
             case 'clearMessages':
-                window.clearMessages('commands-output');
-                window.clearMessages('chat-messages');
+                clearMessages('commands-output');
+                clearMessages('chat-messages');
                 break;
         }
     });
