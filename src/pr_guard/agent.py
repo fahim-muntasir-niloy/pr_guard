@@ -3,9 +3,14 @@ from langchain.agents.structured_output import ToolStrategy
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langgraph.checkpoint.memory import InMemorySaver
 
-from pr_guard.prompt import review_prompt, cli_prompt
+from pr_guard.prompt import review_prompt, cli_prompt, one_click_pr_prompt
 from pr_guard.model import llm
-from pr_guard.tools import TOOLS
+from pr_guard.tools import (
+    TOOLS,
+    execute_git_operations,
+    execute_github_command,
+    gh_pr_create,
+)
 from pr_guard.schema.response import GitHubPRReview
 
 
@@ -35,9 +40,9 @@ async def chat_agent():
 
 async def one_click_pr_agent():
     agent = create_agent(
-        tools=TOOLS,
+        tools=[execute_git_operations, execute_github_command, gh_pr_create],
         model=llm,
-        system_prompt="You are an automated GitHub Pull Request generator. You dont ask questions, just do what is told to you.",
+        system_prompt=one_click_pr_prompt,
         # middleware=[ToolCallLimitMiddleware(run_limit=5)],
         name="PR_Guard_Agent",
         checkpointer=InMemorySaver(),
