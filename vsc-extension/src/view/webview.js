@@ -244,43 +244,40 @@
                 'default': { icon: 'tools', label: 'Tool Call' }
             };
 
-            // Robust splitting: standard tool calls come as "ToolName: {json...}"
-            // but sometimes just "ToolName" or "ToolName: "
+            // Content is now a JSON string: { name: "ToolName", args: {...} }
             let toolName = 'Unknown';
-            let toolArgs = '{}';
+            let toolArgsObj = {};
+            let toolArgsPretty = '{}';
 
-            const firstColonIndex = content.indexOf(':');
-            if (firstColonIndex !== -1) {
-                toolName = content.substring(0, firstColonIndex).trim();
-                toolArgs = content.substring(firstColonIndex + 1).trim();
-            } else {
-                toolName = content.trim();
-            }
-            
-            // Try pretty print JSON
             try {
-                // If args is empty string, default empty dict
-                if (!toolArgs) toolArgs = '{}';
-                const parsed = JSON.parse(toolArgs);
-                toolArgs = JSON.stringify(parsed, null, 2);
+                const payload = JSON.parse(content);
+                toolName = payload.name || 'Unknown';
+                toolArgsObj = payload.args || {};
+                toolArgsPretty = JSON.stringify(toolArgsObj, null, 2);
             } catch (e) {
-                // If not valid JSON, keep as is
+                // Fallback for legacy format or error
+                toolName = 'Error parsing tool';
+                toolArgsPretty = content;
             }
 
             const info = toolMap[toolName] || toolMap['default'];
-
+            
             div.innerHTML = `
                 <div class="tool-card">
                     <div class="tool-header" onclick="this.parentElement.classList.toggle('expanded')">
                         <div class="tool-icon"><i class="codicon codicon-${info.icon}"></i></div>
-                        <div class="tool-name">${info.label}: <span style="font-weight:normal; opacity:0.8">${toolName}</span></div>
+                        <div class="tool-info-row" style="flex:1; display:flex; align-items:baseline; gap:8px; overflow:hidden;">
+                            <div class="tool-name">${info.label}</div>
+                            <div class="tool-summary-text" style="font-family:monospace; font-size:10px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity: 0.7;">
+                                ${toolName}
+                            </div>
+                        </div>
                         <div class="tool-status">
-                            <span>Executed</span>
                             <i class="codicon codicon-chevron-right tool-toggle-icon"></i>
                         </div>
                     </div>
                     <div class="tool-details">
-                        <div class="tool-args-block">${toolArgs}</div>
+                        <div class="tool-args-block">${toolArgsPretty}</div>
                     </div>
                 </div>
             `;
