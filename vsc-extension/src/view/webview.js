@@ -109,6 +109,55 @@
         }
     };
 
+    const updateBranchSelects = (branches) => {
+        const base = document.getElementById('pr-base');
+        const head = document.getElementById('pr-head');
+        
+        // Preserve current selections if possible
+        const baseVal = base.value;
+        const headVal = head.value;
+
+        [base, head].forEach(sel => {
+            sel.innerHTML = '';
+            // Add HEAD option manually for head branch selection (common use case)
+            if (sel.id === 'pr-head') {
+                 const optHead = document.createElement('option');
+                 optHead.value = 'HEAD';
+                 optHead.innerText = 'HEAD (Current)';
+                 sel.appendChild(optHead);
+            }
+
+            branches.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b;
+                opt.innerText = b;
+                sel.appendChild(opt);
+            });
+        });
+
+        if (baseVal && Array.from(base.options).some(o => o.value === baseVal)) base.value = baseVal;
+        else {
+            if (branches.includes('main')) base.value = 'main';
+            else if (branches.includes('master')) base.value = 'master';
+        }
+
+         if (headVal && Array.from(head.options).some(o => o.value === headVal)) head.value = headVal;
+    };
+
+    const loadBranches = async () => {
+        try {
+            const res = await fetch('http://127.0.0.1:8000/branches');
+            if (res.ok) {
+                const data = await res.json();
+                if (data.branches) {
+                    updateBranchSelects(data.branches);
+                }
+            }
+        } catch (e) {
+            console.log('Server not ready for branches yet', e);
+        }
+    };
+
     // Event Listeners
     document.getElementById('tab-commands').addEventListener('click', () => switchTab('commands'));
     document.getElementById('tab-chat').addEventListener('click', () => switchTab('chat'));
@@ -133,6 +182,18 @@
     document.getElementById('send-btn').addEventListener('click', sendMessage);
     document.getElementById('new-session-btn').addEventListener('click', startChat);
     document.getElementById('reconnect-btn').addEventListener('click', reconnect);
+    
+    const refreshBtn = document.getElementById('refresh-branches');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            loadBranches();
+        });
+    }
+
+    // Initial load
+    setTimeout(loadBranches, 1000); // Wait a sec for server to potentially start
+    setInterval(loadBranches, 10000); // Poll occasionally
 
     function addMessage(type, content, context) {
         // If context is provided, use it to select container.

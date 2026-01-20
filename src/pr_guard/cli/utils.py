@@ -188,7 +188,8 @@ async def run_review(plain: bool = False, github: bool = False):
             else "dim"
         )
 
-        info = f"[bold cyan]{comment['path']}[/bold cyan]"
+        line_info = f":{comment.get('line', '')}" if comment.get("line") else ""
+        info = f"[bold cyan]{comment['path']}{line_info}[/bold cyan]"
         sev_badge = f"[{sev_color}]▐ {severity.upper()}[/{sev_color}]"
 
         console.print(

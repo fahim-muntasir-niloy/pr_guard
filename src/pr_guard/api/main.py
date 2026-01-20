@@ -257,3 +257,33 @@ async def one_click_pr(request: ChatPullRequest):
         chat_event_generator(agent, message, thread_id=str(uuid.uuid4())),
         media_type="text/event-stream",
     )
+
+
+@app.get(
+    "/branches",
+    tags=["Git"],
+    summary="List git branches",
+    description="Returns a list of all local and remote git branches.",
+)
+async def list_branches():
+    from pr_guard.utils.git_utils import _run_git_command
+
+    try:
+        raw = _run_git_command(["branch", "-a"])
+        branches = set()
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            # Remove * for current branch
+            clean_name = line.replace("* ", "").strip()
+            # Remove remotes/origin/ prefix to get clean names
+            if clean_name.startswith("remotes/origin/"):
+                clean_name = clean_name.replace("remotes/origin/", "")
+
+            if "->" not in clean_name:
+                branches.add(clean_name)
+
+        return {"branches": sorted(list(branches))}
+    except Exception:
+        return {"branches": ["master", "main", "HEAD"]}

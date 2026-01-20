@@ -223,18 +223,18 @@ async def execute_git_operations(command: str) -> str:
 
 
 TOOLS = [
-    get_list_of_changed_files,
+    # get_list_of_changed_files,
     get_diff_of_single_file,
     # build_code,
     list_files_tree,
     read_file_cat,
-    list_git_branches,
-    get_git_diff_between_branches,
-    get_git_log,
+    # list_git_branches,
+    # get_git_diff_between_branches,
+    # get_git_log,
     search_code_grep,
-    list_changed_files_between_branches,
-    gh_pr_create,
-    gh_pr_view,
+    # list_changed_files_between_branches,
+    # gh_pr_create,
+    # gh_pr_view,
     execute_github_command,
     execute_git_operations,
 ]

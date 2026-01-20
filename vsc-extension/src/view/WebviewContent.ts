@@ -41,11 +41,16 @@ export class WebviewContent {
                         </div>
                         <div class="input-group">
                             <label class="input-label">Base Branch</label>
-                            <input type="text" id="pr-base" class="input" value="master">
+                            <select id="pr-base" class="input">
+                                <option value="master">master</option>
+                                <option value="main">main</option>
+                            </select>
                         </div>
                         <div class="input-group">
-                            <label class="input-label">Head Branch</label>
-                            <input type="text" id="pr-head" class="input" value="HEAD">
+                            <label class="input-label">Head Branch <a href="#" id="refresh-branches" style="font-size:10px; margin-left:5px; text-decoration:none;">Refresh</a></label>
+                            <select id="pr-head" class="input">
+                                <option value="HEAD">HEAD</option>
+                            </select>
                         </div>
                         <button id="one-click-pr-btn" class="button">Create PR</button>
                     </div>
