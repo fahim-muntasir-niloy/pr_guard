@@ -156,7 +156,7 @@ def pr(
         ..., "--instructions", "-i", help="User instructions for PR"
     ),
     base: str = typer.Option("master", "--base", "-b", help="Base branch"),
-    head: str = typer.Option("HEAD", "--head", "-h", help="Head branch"),
+    head: str = typer.Option("HEAD", "--head", "-H", help="Head branch"),
 ):
     """
     Create a one-click pull request.
