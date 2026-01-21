@@ -19,7 +19,7 @@ def _get_review_range() -> tuple[str, str]:
     """
     Determines the git range to use for reviews.
     In CI, it uses GITHUB_BASE_REF and GITHUB_HEAD_REF.
-    Locally, it defaults to master...HEAD or HEAD~1...HEAD.
+    Locally, it defaults to origin/master...HEAD, master...HEAD or HEAD~1...HEAD.
     """
     base = os.getenv("GITHUB_BASE_REF")
 
@@ -36,8 +36,14 @@ def _get_review_range() -> tuple[str, str]:
     default = get_default_branch()
     current = _run_git_command(["rev-parse", "--abbrev-ref", "HEAD"]).strip()
 
-    if current != default and "Error" not in current and "Error" not in default:
-        return default, "HEAD"
+    if "Error" not in current and "Error" not in default:
+        if current != default:
+            # Prefer origin/{default} to avoid stale local branch issues
+            origin_base = f"origin/{default}"
+            check = _run_git_command(["rev-parse", "--verify", origin_base])
+            if "Error" not in check:
+                return origin_base, "HEAD"
+            return default, "HEAD"
 
     return "HEAD~1", "HEAD"
 
