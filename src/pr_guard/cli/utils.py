@@ -26,6 +26,16 @@ console = Console()
 
 
 def setup_env():
+    """Setup environment variables and check for required API keys."""
+    if not settings.OPENAI_API_KEY:
+        console.print("\n[bold red]❌ Environment Error:[/bold red]")
+        console.print(
+            "[yellow]OPENAI_API_KEY is missing. Please create a .env file and place your keys.[/yellow]\n"
+        )
+        import sys
+
+        sys.exit(1)
+
     if settings.LANGSMITH_API_KEY:
         os.environ["LANGSMITH_TRACING"] = "true"
         os.environ["LANGSMITH_ENDPOINT"] = "https://api.smith.langchain.com"

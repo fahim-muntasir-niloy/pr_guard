@@ -147,6 +147,8 @@ export class ApiClient {
                                 this._callbacks.onMessage('assistant', reportHtml);
                             } else if (data.type === 'status') {
                                 this._callbacks.onMessage('system', data.message);
+                            } else if (data.type === 'error') {
+                                this._callbacks.onMessage('system', `❌ AI Error: ${data.content}`);
                             }
                         } catch (e) {
                             // Invalid JSON
@@ -217,6 +219,8 @@ export class ApiClient {
                                     args: data.args || {} 
                                 });
                                 this._callbacks.onMessage('tool', toolPayload);
+                            } else if (data.type === 'error') {
+                                this._callbacks.onMessage('system', `❌ AI Error: ${data.content}`);
                             }
                         } catch (e) {
                             // Invalid JSON
@@ -285,6 +289,8 @@ export class ApiClient {
                                     args: data.args || {} 
                                 });
                                 this._callbacks.onMessage('tool', toolPayload);
+                            } else if (data.type === 'error') {
+                                this._callbacks.onMessage('system', `❌ AI Error: ${data.content}`);
                             }
                         } catch (e) {
                             // Invalid JSON

@@ -1,6 +1,5 @@
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
-from langchain.agents.middleware import ToolCallLimitMiddleware
 from langgraph.checkpoint.memory import InMemorySaver
 
 from pr_guard.prompt import review_prompt, cli_prompt, one_click_pr_prompt
@@ -44,6 +43,5 @@ async def one_click_pr_agent():
         system_prompt=one_click_pr_prompt,
         # middleware=[ToolCallLimitMiddleware(run_limit=5)],
         name="PR_Guard_Agent",
-        checkpointer=InMemorySaver(),
     )
     return agent
