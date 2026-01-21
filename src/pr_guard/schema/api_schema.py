@@ -61,3 +61,21 @@ class LogResponse(BaseModel):
 class CatResponse(BaseModel):
     path: str = Field(..., description="File path")
     content: str = Field(..., description="File content")
+
+
+class ConfigRequest(BaseModel):
+    llm_provider: Optional[str] = Field(
+        None, description="LLM provider (e.g., openai, xai, anthropic, google_genai)"
+    )
+    llm_model: Optional[str] = Field(None, description="LLM model name")
+    openai_api_key: Optional[str] = Field(None, description="OpenAI API key")
+    xai_api_key: Optional[str] = Field(None, description="XAI API key")
+    anthropic_api_key: Optional[str] = Field(None, description="Anthropic API key")
+    google_api_key: Optional[str] = Field(
+        None, description="Google Generative AI API key"
+    )
+
+
+class ConfigResponse(BaseModel):
+    status: str = Field(..., description="Success or error status")
+    message: str = Field(..., description="Details about the configuration update")

@@ -32,6 +32,7 @@ jobs:
         id: generate
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
           # Use the head SHA of the PR so comments map to the right version
           GITHUB_SHA: ${{ github.event.pull_request.head.sha }}

@@ -31,7 +31,59 @@
         const userInstructions = document.getElementById('pr-instructions').value;
         const base = document.getElementById('pr-base').value;
         const head = document.getElementById('pr-head').value;
+
+        // Show loader
+        const btn = document.getElementById('one-click-pr-btn');
+        const loader = btn.querySelector('.btn-loader');
+        const text = btn.querySelector('.btn-text');
+        
+        btn.disabled = true;
+        loader.classList.remove('hidden');
+        text.style.opacity = '0.5';
+
         runCommand('oneClickPR', { userInstructions, base, head });
+    };
+
+    const saveSettings = () => {
+        const provider = document.getElementById('settings-provider').value;
+        const model = document.getElementById('settings-model').value;
+        const key = document.getElementById('settings-key').value;
+
+        const params = {
+            llm_provider: provider,
+            llm_model: model
+        };
+
+        // Map provider to specific key field
+        if (key) {
+            if (provider === 'openai') params.openai_api_key = key;
+            else if (provider === 'xai') params.xai_api_key = key;
+            else if (provider === 'anthropic') params.anthropic_api_key = key;
+            else if (provider === 'google_genai') params.google_api_key = key;
+        }
+
+        vscode.postMessage({ type: 'runCommand', command: 'updateConfig', params });
+        
+        const saveBtn = document.getElementById('save-settings-btn');
+        saveBtn.innerText = 'Saving...';
+        saveBtn.disabled = true;
+        
+        setTimeout(() => {
+            saveBtn.innerText = 'Save Settings';
+            saveBtn.disabled = false;
+        }, 2000);
+    };
+
+    const toggleKeyVisibility = () => {
+        const keyInput = document.getElementById('settings-key');
+        const icon = document.querySelector('#toggle-key-visibility i');
+        if (keyInput.type === 'password') {
+            keyInput.type = 'text';
+            icon.classList.replace('codicon-eye', 'codicon-eye-closed');
+        } else {
+            keyInput.type = 'password';
+            icon.classList.replace('codicon-eye-closed', 'codicon-eye');
+        }
     };
 
     const startChat = () => {
@@ -161,18 +213,21 @@
     // Event Listeners
     document.getElementById('tab-commands').addEventListener('click', () => switchTab('commands'));
     document.getElementById('tab-chat').addEventListener('click', () => switchTab('chat'));
+    document.getElementById('tab-settings').addEventListener('click', () => {
+        switchTab('settings');
+        // Fetch current status to prepopulate settings
+        runCommand('status');
+    });
 
-    document.querySelectorAll('.collapsible-toggle').forEach(btn => {
-        btn.addEventListener('click', function() {
+    document.querySelectorAll('.collapsible-header').forEach(header => {
+        header.addEventListener('click', function() {
             this.parentElement.classList.toggle("active");
         });
     });
 
-    document.getElementById('review-btn').addEventListener('click', () => runCommand('review'));
-    document.getElementById('tree-btn').addEventListener('click', runTreeWithParams);
-    document.getElementById('changed-btn').addEventListener('click', runChangedWithParams);
-    document.getElementById('status-btn').addEventListener('click', () => runCommand('status'));
     document.getElementById('one-click-pr-btn').addEventListener('click', runOneClickPRWithParams);
+    document.getElementById('save-settings-btn').addEventListener('click', saveSettings);
+    document.getElementById('toggle-key-visibility').addEventListener('click', toggleKeyVisibility);
     document.getElementById('clear-output-btn').addEventListener('click', () => clearMessages('commands-output'));
     document.getElementById('save-report-btn').addEventListener('click', () => {
         const reportMessages = document.querySelectorAll('#commands-output .message.assistant');
@@ -222,6 +277,13 @@
             // User message triggers loading, BUT we must append user message first
         } else if (type === 'assistant' || type === 'system') {
             setLoading(false);
+            // Reset PR button state if it was loading
+            const btn = document.getElementById('one-click-pr-btn');
+            const loader = btn.querySelector('.btn-loader');
+            const text = btn.querySelector('.btn-text');
+            btn.disabled = false;
+            loader.classList.add('hidden');
+            text.style.opacity = '1';
         } else if (type === 'tool') {
             setLoading(false);
         }
@@ -346,6 +408,14 @@
                 document.getElementById('send-btn').disabled = !isOnline;
                 document.getElementById('status-dot').className = 'status-dot ' + (isOnline ? 'online' : 'offline');
                 document.getElementById('status-text').innerText = isOnline ? 'Ready' : 'Offline';
+                if (isOnline) loadBranches();
+                break;
+            case 'updateSettings':
+                if (m.config) {
+                    document.getElementById('settings-provider').value = m.config.llm_provider || 'openai';
+                    document.getElementById('settings-model').value = m.config.llm_model || '';
+                    // We don't populate keys for security, but we show masked key in info if needed
+                }
                 break;
             case 'clearMessages':
                 clearMessages('commands-output');

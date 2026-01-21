@@ -128,7 +128,17 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             return;
         }
         if (subCommand === 'status') {
-            await this._apiClient.runStatus();
+            const config = await this._apiClient.runStatus();
+            if (config && this._view) {
+                this._view.webview.postMessage({
+                    type: 'updateSettings',
+                    config
+                });
+            }
+            return;
+        }
+        if (subCommand === 'updateConfig') {
+            await this._apiClient.updateConfig(params);
             return;
         }
         if (subCommand === 'getTree') {
