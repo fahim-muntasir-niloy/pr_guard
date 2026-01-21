@@ -229,6 +229,7 @@
     document.getElementById('save-settings-btn').addEventListener('click', saveSettings);
     document.getElementById('toggle-key-visibility').addEventListener('click', toggleKeyVisibility);
     document.getElementById('clear-output-btn').addEventListener('click', () => clearMessages('commands-output'));
+    document.getElementById('system-status-btn').addEventListener('click', () => runCommand('status'));
     document.getElementById('save-report-btn').addEventListener('click', () => {
         const reportMessages = document.querySelectorAll('#commands-output .message.assistant');
         const reportContent = Array.from(reportMessages).map(msg => msg.getAttribute('data-raw')).join('\n\n');
@@ -275,15 +276,26 @@
 
         if (type === 'user') {
             // User message triggers loading, BUT we must append user message first
-        } else if (type === 'assistant' || type === 'system') {
+        } else if (type === 'assistant') {
             setLoading(false);
-            // Reset PR button state if it was loading
+            // Reset PR button state when assistant starts responding
             const btn = document.getElementById('one-click-pr-btn');
             const loader = btn.querySelector('.btn-loader');
             const text = btn.querySelector('.btn-text');
             btn.disabled = false;
             loader.classList.add('hidden');
             text.style.opacity = '1';
+        } else if (type === 'system') {
+            setLoading(false);
+            // Only reset PR button on errors or completion messages
+            if (content.includes('Error') || content.includes('completed') || content.includes('success')) {
+                const btn = document.getElementById('one-click-pr-btn');
+                const loader = btn.querySelector('.btn-loader');
+                const text = btn.querySelector('.btn-text');
+                btn.disabled = false;
+                loader.classList.add('hidden');
+                text.style.opacity = '1';
+            }
         } else if (type === 'tool') {
             setLoading(false);
         }

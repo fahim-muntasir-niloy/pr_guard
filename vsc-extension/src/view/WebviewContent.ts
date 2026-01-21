@@ -63,15 +63,18 @@ export class WebviewContent {
                 </div>
             </div>
 
-            <div class="output-container" id="commands-output">
+            <div class="output-container">
                  <div class="output-header">
                     <span>Activity Log</span>
                     <div>
+                        <span id="system-status-btn" class="action-icon" title="System Status"><i class="codicon codicon-pulse"></i></span>
                         <span id="save-report-btn" class="action-icon" title="Save Report"><i class="codicon codicon-save"></i></span>
                         <span id="clear-output-btn" class="action-icon" title="Clear Output"><i class="codicon codicon-trash"></i></span>
                     </div>
                 </div>
-                <div class="placeholder">Command output will appear here.</div>
+                <div id="commands-output">
+                    <div class="placeholder">Command output will appear here.</div>
+                </div>
             </div>
         </div>
 

@@ -23,6 +23,11 @@ class GitStatus(BaseModel):
 class StatusResponse(BaseModel):
     git: Any = Field(..., description="Git repository status")
     openai_api_key: str = Field(..., description="Status of the OpenAI API key")
+    xai_api_key: str = Field(..., description="Status of the XAI API key")
+    anthropic_api_key: str = Field(..., description="Status of the Anthropic API key")
+    google_api_key: str = Field(..., description="Status of the Google API key")
+    llm_provider: str = Field(..., description="Current LLM provider")
+    llm_model: str = Field(..., description="Current LLM model")
     langsmith_api_key: str = Field(..., description="Status of the LangSmith API key")
     langsmith_tracing: bool = Field(
         ..., description="Whether LangSmith tracing is enabled"
