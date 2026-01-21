@@ -8,8 +8,14 @@ if settings.OPENAI_API_KEY:
 if settings.XAI_API_KEY:
     os.environ["XAI_API_KEY"] = settings.XAI_API_KEY
 
-# llm = init_chat_model(model="gpt-5")
+if settings.ANTHROPIC_API_KEY:
+    os.environ["ANTHROPIC_API_KEY"] = settings.ANTHROPIC_API_KEY
+
+if settings.GOOGLE_API_KEY:
+    os.environ["GOOGLE_API_KEY"] = settings.GOOGLE_API_KEY
 
 llm = init_chat_model(
-    model="grok-4-1-fast-reasoning", model_provider="xai", temperature=0.5
+    model=settings.LLM_MODEL,
+    model_provider=settings.LLM_PROVIDER,
+    temperature=0.5,
 )

@@ -16,6 +16,7 @@ from pr_guard.cli.utils import (
     run_version,
     run_serve,
     run_one_click_pr,
+    run_config,
 )
 
 app = typer.Typer(
@@ -173,6 +174,14 @@ def serve(
     🚀 [bold cyan]Serve[/bold cyan] the PR Guard API.
     """
     run_serve(host=host, port=port)
+
+
+@app.command()
+def config():
+    """
+    ⚙️ [bold cyan]Configure[/bold cyan] PR Guard settings (Provider, Model, Keys).
+    """
+    asyncio.run(run_config())
 
 
 if __name__ == "__main__":
