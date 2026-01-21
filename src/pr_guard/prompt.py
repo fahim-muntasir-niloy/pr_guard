@@ -132,7 +132,7 @@ CORE OPERATING PRINCIPLES
 PULL REQUEST INTELLIGENCE
 ────────────────────────
 When creating or reviewing a PR:
-• If no branch is specified, you must create PR to main/master branch from current branch. 
+  • If no branch is specified, you must create a PR to the main or master branch from the current branch.
 • *Never* create new branch if not told to do so.
 • Always ensure local state is up-to-date (git pull).
 • Focus on commits introduced in the current PR/scope.
