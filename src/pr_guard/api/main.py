@@ -2,7 +2,11 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi import Request
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pr_guard.api.utils import review_event_generator, chat_event_generator
+from pr_guard.api.utils import (
+    review_event_generator,
+    chat_event_generator,
+    pr_event_generator,
+)
 from pr_guard.schema.api_schema import (
     ChatRequest,
     ChatPullRequest,
@@ -45,9 +49,34 @@ app.add_middleware(
 async def app_exception_handler(request: Request, exc: Exception):
     logger = setup_logger()
     logger.error(f"{exc.__class__.__name__}: {exc}")
+
+    status_code = 500
+    message = "Internal server error"
+    error_type = exc.__class__.__name__
+
+    # Specific AI provider error handling
+    if "RateLimitError" in error_type or "insufficient_quota" in str(exc).lower():
+        status_code = 429
+        message = (
+            "OpenAI Quota Exceeded. Please check your billing/usage limits at "
+            "https://platform.openai.com/account/billing"
+        )
+    elif "AuthenticationError" in error_type or "api_key" in str(exc).lower():
+        status_code = 401
+        message = (
+            "Invalid API Key. Please verify your OPENAI_API_KEY in the environment."
+        )
+    elif isinstance(exc, HTTPException):
+        status_code = exc.status_code
+        message = exc.detail
+
     return JSONResponse(
-        status_code=500,
-        content={"error": "Internal server error"},
+        status_code=status_code,
+        content={
+            "error": message,
+            "type": error_type,
+            "details": str(exc) if status_code != 500 else None,
+        },
     )
 
 
@@ -235,7 +264,7 @@ async def one_click_pr(request: ChatPullRequest):
     """
     agent = await one_click_pr_agent()
     return StreamingResponse(
-        chat_event_generator(agent, message, thread_id=str(uuid.uuid4())),
+        pr_event_generator(agent, message),
         media_type="text/event-stream",
     )
 

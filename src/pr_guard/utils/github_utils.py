@@ -213,9 +213,18 @@ def build_github_review_payload(
                 }
             )
 
+    event = review_dict["event"]
+    body = review_dict["body"]
+
+    # Workaround: GitHub Actions GITHUB_TOKEN often lacks 'approve' permission.
+    # We convert APPROVE to COMMENT so the review still goes through.
+    if event == "APPROVE":
+        event = "COMMENT"
+        body = f"✅ **Approved**\n\n{body}"
+
     review_payload = {
-        "event": review_dict["event"],
-        "body": review_dict["body"],
+        "event": event,
+        "body": body,
         "comments": inline_comments,
         "commit_id": os.getenv("GITHUB_SHA"),
     }
