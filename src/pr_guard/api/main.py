@@ -16,6 +16,8 @@ from pr_guard.schema.api_schema import (
     DiffResponse,
     LogResponse,
     CatResponse,
+    ConfigRequest,
+    ConfigResponse,
 )
 from pr_guard.cli.logging_config import setup_logger
 
@@ -111,6 +113,15 @@ async def status():
     status_data["openai_api_key"] = (
         "Configured" if settings.OPENAI_API_KEY else "Missing"
     )
+    status_data["xai_api_key"] = "Configured" if settings.XAI_API_KEY else "Missing"
+    status_data["anthropic_api_key"] = (
+        "Configured" if settings.ANTHROPIC_API_KEY else "Missing"
+    )
+    status_data["google_api_key"] = (
+        "Configured" if settings.GOOGLE_API_KEY else "Missing"
+    )
+    status_data["llm_provider"] = settings.LLM_PROVIDER
+    status_data["llm_model"] = settings.LLM_MODEL
     status_data["langsmith_api_key"] = (
         "Configured" if settings.LANGSMITH_API_KEY else "Missing"
     )
@@ -297,3 +308,32 @@ async def list_branches():
         return {"branches": sorted(list(branches))}
     except Exception:
         return {"branches": ["master", "main", "HEAD"]}
+
+
+@app.post(
+    "/config",
+    response_model=ConfigResponse,
+    tags=["General"],
+    summary="Update PR Guard configuration",
+    description="Updates the provider, model, and API keys in the .env file.",
+)
+async def update_config(request: ConfigRequest):
+    from pr_guard.cli.utils import update_env_file
+
+    if request.llm_provider:
+        update_env_file("LLM_PROVIDER", request.llm_provider)
+    if request.llm_model:
+        update_env_file("LLM_MODEL", request.llm_model)
+    if request.openai_api_key:
+        update_env_file("OPENAI_API_KEY", request.openai_api_key)
+    if request.xai_api_key:
+        update_env_file("XAI_API_KEY", request.xai_api_key)
+    if request.anthropic_api_key:
+        update_env_file("ANTHROPIC_API_KEY", request.anthropic_api_key)
+    if request.google_api_key:
+        update_env_file("GOOGLE_API_KEY", request.google_api_key)
+
+    return {
+        "status": "success",
+        "message": "Configuration updated successfully. Please restart the server for changes to take effect.",
+    }

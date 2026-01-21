@@ -37,11 +37,34 @@ export class ApiClient {
                 gitInfo = data.git;
             }
 
-            const statusText = `**Git Status**\n${gitInfo}\n\n**Configuration**\n- OpenAI API Key: ${data.openai_api_key}\n- LangSmith Tracing: ${data.langsmith_tracing ? 'Enabled' : 'Disabled'}`;
+            const statusText = `**Git Status**\n${gitInfo}\n\n**Configuration**\n- Provider: ${data.llm_provider}\n- Model: ${data.llm_model}\n- LangSmith Tracing: ${data.langsmith_tracing ? 'Enabled' : 'Disabled'}`;
 
             this._callbacks.onMessage('assistant', statusText);
+            
+            // Return raw data for webview to prepopulate settings
+            return data;
         } catch (error: any) {
             this._callbacks.onMessage('system', `❌ Error: ${error.message}`);
+        }
+    }
+
+    public async updateConfig(params: any) {
+        this._callbacks.onMessage('system', '⚙️ Updating Configuration via API...');
+        try {
+            const response = await fetch(`${this._apiBaseUrl}/config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(params)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}`);
+            }
+
+            this._callbacks.onMessage('system', '✅ Configuration updated successfully.');
+            this._callbacks.onMessage('assistant', 'Configuration saved! Please restart the server for changes to take effect.');
+        } catch (error: any) {
+            this._callbacks.onMessage('system', `❌ Error mapping config: ${error.message}`);
         }
     }
 
