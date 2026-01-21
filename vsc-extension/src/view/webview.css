@@ -82,7 +82,7 @@ body {
 /* Minimal Actions Layout */
 #commands-tab {
     padding: 8px;
-    overflow-y: auto;
+    overflow: hidden; /* Changed from overflow-y: auto */
     gap: 12px;
 }
 
@@ -576,13 +576,16 @@ input[type="text"]:focus {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 4px 8px;
-    background: var(--vscode-textCodeBlock-background);
+    padding: 6px 10px;
+    background: var(--vscode-sideBar-background);
     border-bottom: 1px solid var(--vscode-widget-border);
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--text-secondary);
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 .output-header .action-icon {
     cursor: pointer;
