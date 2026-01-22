@@ -311,8 +311,13 @@ jobs:
 
       - name: Run PR Guard Review
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # Optional
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }} # Optional
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }} # Optional
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }} # Optional
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }} # Optional
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }} # Optional
+          LLM_MODEL: ${{ secrets.LLM_MODEL }} # Optional
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
