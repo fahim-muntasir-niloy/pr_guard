@@ -17,5 +17,5 @@ if settings.GOOGLE_API_KEY:
 llm = init_chat_model(
     model=settings.LLM_MODEL,
     model_provider=settings.LLM_PROVIDER,
-    temperature=0.5,
+    temperature=0,
 )
