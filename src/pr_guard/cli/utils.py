@@ -44,10 +44,16 @@ def setup_env(strict: bool = True):
         has_key = True
 
     if not has_key and strict:
+        is_ci = os.getenv("GITHUB_ACTIONS") == "true" or os.getenv("CI") == "true"
         console.print("\n[bold red]❌ Environment Error:[/bold red]")
-        console.print(
-            f"[yellow]{provider.upper()}_API_KEY is missing. Please create a .env file or run 'pr-guard config' to set your keys.[/yellow]\n"
-        )
+        if is_ci:
+            console.print(
+                f"[yellow]{provider.upper()}_API_KEY is missing. Please ensure you have added it to your GitHub Repository Secrets.[/yellow]\n"
+            )
+        else:
+            console.print(
+                f"[yellow]{provider.upper()}_API_KEY is missing. Please create a .env file or run 'pr-guard config' to set your keys.[/yellow]\n"
+            )
         import sys
 
         sys.exit(1)
@@ -311,14 +317,14 @@ jobs:
 
       - name: Run PR Guard Review
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # Optional
-          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }} # Optional
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }} # Optional
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }} # Optional
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }} # Optional
           LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }} # Optional
           LLM_MODEL: ${{ secrets.LLM_MODEL }} # Optional
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }} # Optional
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
           GITHUB_BASE_REF: ${{ github.base_ref }}
@@ -345,7 +351,7 @@ jobs:
     console.print("\n[bold]Next steps:[/bold]")
     console.print("1. Push this file to your repository.")
     console.print(
-        "2. Ensure [bold]OPENAI_API_KEY[/bold] is added to your GitHub Secrets."
+        "2. Ensure your LLM API Key (e.g. [bold]OPENAI_API_KEY[/bold] or [bold]XAI_API_KEY[/bold]) is added to your GitHub Secrets."
     )
     console.print("3. PR Guard will now automatically review your PRs!")
 
