@@ -31,7 +31,21 @@ def setup_env(strict: bool = True):
     from pr_guard.config import settings
 
     # Check key based on provider
-    provider = settings.LLM_PROVIDER
+    provider = settings.LLM_PROVIDER.lower().strip() if settings.LLM_PROVIDER else "xai"
+
+    # If explicitly set provider is invalid/empty, try to guess from available keys
+    if not provider:
+        if settings.XAI_API_KEY:
+            provider = "xai"
+        elif settings.OPENAI_API_KEY:
+            provider = "openai"
+        elif settings.ANTHROPIC_API_KEY:
+            provider = "anthropic"
+        elif settings.GOOGLE_API_KEY:
+            provider = "google_genai"
+        else:
+            provider = "openai"  # Ultimate fallback for error message
+
     has_key = False
 
     if provider == "openai" and settings.OPENAI_API_KEY:
@@ -107,6 +121,14 @@ async def run_review(plain: bool = False, github: bool = False):
 
     agent = await init_review_agent()
 
+    # Determine branch context for the prompt
+    base_ref = os.getenv("GITHUB_BASE_REF")
+    head_ref = os.getenv("GITHUB_HEAD_REF")
+
+    user_content = "Execute a full code review for the latest git commits. Call the tools needed to understand the scope and diff."
+    if base_ref and head_ref:
+        user_content = f"Execute a full code review for changes from branch `{head_ref}` into `{base_ref}`. Focus on the diff between `{base_ref}` and `{head_ref}`."
+
     # Track the result for the final report
     final_structured_res = None
 
@@ -116,7 +138,7 @@ async def run_review(plain: bool = False, github: bool = False):
             "messages": [
                 {
                     "role": "user",
-                    "content": "Execute a full code review for the latest git commits. Call the tools needed to understand the scope and diff.",
+                    "content": user_content,
                 }
             ]
         },
