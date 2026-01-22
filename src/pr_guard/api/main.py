@@ -1,5 +1,6 @@
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi import Request
+import uuid
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pr_guard.api.utils import (
@@ -35,7 +36,7 @@ async def startup_event():
     """Setup environment variables on startup."""
     from pr_guard.cli.utils import setup_env
 
-    setup_env()
+    setup_env(strict=False)
 
 
 app.add_middleware(
@@ -239,7 +240,6 @@ async def review():
     Yields tokens and tool calls as SSE events.""",
 )
 async def chat(request: ChatRequest):
-    import uuid
     from pr_guard.agent import chat_agent
 
     thread_id = request.thread_id or str(uuid.uuid4())
@@ -257,7 +257,6 @@ async def chat(request: ChatRequest):
     description="Creates a new pull request on GitHub.",
 )
 async def one_click_pr(request: ChatPullRequest):
-    import uuid
     from pr_guard.agent import one_click_pr_agent
 
     user_instructions = request.user_instructions
