@@ -26,12 +26,27 @@ import dotenv
 console = Console()
 
 
-def setup_env():
+def setup_env(strict: bool = True):
     """Setup environment variables and check for required API keys."""
-    if not settings.OPENAI_API_KEY:
+    from pr_guard.config import settings
+
+    # Check key based on provider
+    provider = settings.LLM_PROVIDER
+    has_key = False
+
+    if provider == "openai" and settings.OPENAI_API_KEY:
+        has_key = True
+    elif provider == "anthropic" and settings.ANTHROPIC_API_KEY:
+        has_key = True
+    elif provider == "google_genai" and settings.GOOGLE_API_KEY:
+        has_key = True
+    elif provider == "xai" and settings.XAI_API_KEY:
+        has_key = True
+
+    if not has_key and strict:
         console.print("\n[bold red]❌ Environment Error:[/bold red]")
         console.print(
-            "[yellow]OPENAI_API_KEY is missing. Please create a .env file or run 'pr-guard config' to set your keys.[/yellow]\n"
+            f"[yellow]{provider.upper()}_API_KEY is missing. Please create a .env file or run 'pr-guard config' to set your keys.[/yellow]\n"
         )
         import sys
 
@@ -706,12 +721,14 @@ def check_gh_cli():
 
 
 def update_env_file(key: str, value: str):
-    """Updates a key in the .env file."""
+    """
+    Updates a key in the global .env file (~/.pr_guard/.env).
+    """
     env_path = os.path.join(os.path.expanduser("~"), ".pr_guard", ".env")
-    os.makedirs(os.path.dirname(env_path), exist_ok=True)
 
+    os.makedirs(os.path.dirname(env_path), exist_ok=True)
     if not os.path.exists(env_path):
-        with open(env_path, "w") as f:
+        with open(env_path, "w", encoding="utf-8") as f:
             f.write("")
 
     dotenv.set_key(env_path, key, value)
