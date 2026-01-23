@@ -125,7 +125,7 @@ export class WebviewContent {
                             <button id="toggle-key-visibility" class="icon-button"><i class="codicon codicon-eye"></i></button>
                         </div>
                     </div>
-
+                    <p id="save-settings-response"></p>
                     <button id="save-settings-btn" class="button">Save Settings</button>
                 </div>
 

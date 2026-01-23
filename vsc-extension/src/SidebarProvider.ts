@@ -71,7 +71,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 }
                 case 'runCommand': {
                     this._currentContext = 'command';
-                    await this._runCommand(data.command, data.params);
+                    var result = await this._runCommand(data.command, data.params);
+                    
+                    webviewView.webview.postMessage({
+                        type: 'commandResponse',
+                        command: data.command,
+                        data: result
+                    });
+                    
                     break;
                 }
                 case 'clearOutput': {
@@ -138,8 +145,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             return;
         }
         if (subCommand === 'updateConfig') {
-            await this._apiClient.updateConfig(params);
-            return;
+            const result = await this._apiClient.updateConfig(params);
+            return result;
         }
         if (subCommand === 'getTree') {
             await this._apiClient.runTree(params);

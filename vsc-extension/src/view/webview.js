@@ -48,6 +48,13 @@
         const provider = document.getElementById('settings-provider').value;
         const model = document.getElementById('settings-model').value;
         const key = document.getElementById('settings-key').value;
+        console.log(provider)
+        if(!provider || !model || !key) {
+            const response = document.getElementById('save-settings-response');
+            response.innerText = 'Provider, Model Name & API Key are required.';
+            response.style.color = 'red';
+            return;
+        }
 
         const params = {
             llm_provider: provider,
@@ -227,6 +234,19 @@
 
     document.getElementById('one-click-pr-btn').addEventListener('click', runOneClickPRWithParams);
     document.getElementById('save-settings-btn').addEventListener('click', saveSettings);
+    window.addEventListener('message', event => {
+    const msg = event.data;
+    console.log('Received message:', msg);
+        if (msg.type === 'commandResponse' && msg.command === 'updateConfig') {
+            const response = document.getElementById('save-settings-response');
+            response.innerText = msg.data.message;
+            response.style.color = msg.data.success ? 'green' : 'red';
+            
+            setTimeout(() => {
+                response.innerText = '';
+            }, 2000);
+        }
+    });
     document.getElementById('toggle-key-visibility').addEventListener('click', toggleKeyVisibility);
     document.getElementById('clear-output-btn').addEventListener('click', () => clearMessages('commands-output'));
     document.getElementById('system-status-btn').addEventListener('click', () => runCommand('status'));
