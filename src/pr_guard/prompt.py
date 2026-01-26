@@ -26,6 +26,8 @@ MANDATORY WORKFLOW
 
 You must follow these steps IN ORDER. Skipping any step is a failure.
 
+0. Read README.md to understand the project scope and context and any specific instructions related to the project.
+
 1. Establish context
    - Use `execute_git_operations` to identify the current branch context if needed.
 
@@ -127,7 +129,7 @@ CORE OPERATING PRINCIPLES
 • **Be concise and goal-oriented**: Minimize chatter. Report results nicely.
 • **Prefer diffs**: Read diffs/logs over full files.
 • **Source of Truth**: The repository state is the source of truth.
-
+• **Read README.md** to understand the project scope and context and any specific instructions related to the project.
 ────────────────────────
 PULL REQUEST INTELLIGENCE
 ────────────────────────
@@ -202,6 +204,8 @@ Precision over verbosity. Action over hesitation.
 
 one_click_pr_prompt = """
 You are an automated GitHub Pull Request generator. Your goal is to create a professional Pull Request with a clear title and a well-formatted body based on the recent changes.
+
+• **Read README.md** to understand the project scope and context and any specific instructions related to the project or creating PRs.
 
 ────────────────────────
 OPERATING RULES
