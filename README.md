@@ -25,6 +25,7 @@ curl -fsSL https://raw.githubusercontent.com/fahim-muntasir-niloy/pr_guard/maste
 ## ✨ Features
 
 - **🤖 AI-Powered Analysis**: Beyond linting—understands logic, security vulnerabilities, and architectural patterns.
+- **📜 Guideline Adherence**: Automatically reads your `README.md` and `CONTRIBUTING.md` to ensure changes follow project-specific conventions.
 - **💡 Smart Suggestions**: Provides GitHub-style suggested changes that can be applied with a single click.
 - **⚡ Seamless Integration**: Works as a CLI tool for local checks or a GitHub Action for team-wide automation.
 - **🎨 Rich CLI Output**: Beautiful terminal feedback using the `rich` library.
@@ -46,10 +47,19 @@ uv sync
 ```
 
 ### 3. Environment Setup
-Create a `.env` file in the root directory:
+PR Guard searches for configuration in the following order (highest priority first):
+
+1.  `.pr_guard.env` (Current directory)
+2.  `.pr_guard/.env` (Project-specific settings)
+3.  `~/.pr_guard/.env` (**Global settings** - recommended for API keys)
+4.  `.env` (Generic project environment file)
+
+**Recommended Global Setup:**
+Create a `.env` file in your home directory's `.pr_guard` folder:
 ```env
-OPENAI_API_KEY=your_key_here
-LANGSMITH_API_KEY=your_key_here
+OPENAI/XAI/ANTHROPIC/GOOGLE_API_KEY=
+LLM_PROVIDER=
+LLM_MODEL=
 ```
 
 ---

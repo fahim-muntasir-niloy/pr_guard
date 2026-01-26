@@ -14,8 +14,10 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_file=(
-            os.path.join(os.path.expanduser("~"), ".pr_guard", ".env"),
             ".env",
+            os.path.join(os.path.expanduser("~"), ".pr_guard", ".env"),
+            os.path.join(os.getcwd(), ".pr_guard", ".env"),
+            ".pr_guard.env",
         ),
         env_file_encoding="utf-8",
         extra="ignore",
