@@ -28,6 +28,7 @@ from pr_guard.utils.tool_utils import (
     _list_changed_files_between_branches,
     _search_code_grep,
     _build_code,
+    _read_readme,
 )
 
 
@@ -157,6 +158,16 @@ async def build_code() -> str:
     return await _build_code()
 
 
+@tool(args_schema=NoInput)
+async def readme_reader() -> str:
+    """
+    Finds and reads the project's README or GUIDELINES files.
+    Use this to understand the project's purpose, scope, and coding guidelines.
+    Essential for ensuring PRs and reviews follow project-specific rules.
+    """
+    return await _read_readme()
+
+
 @tool(args_schema=GHCreatePRInput)
 async def gh_pr_create(
     title: str,
@@ -267,6 +278,7 @@ TOOLS = [
     # get_git_diff_between_branches,
     # get_git_log,
     search_code_grep,
+    readme_reader,
     # list_changed_files_between_branches,
     gh_pr_create,
     # gh_pr_view,

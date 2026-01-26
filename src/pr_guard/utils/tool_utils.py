@@ -271,3 +271,29 @@ async def _build_code() -> str:
     tool_info = f"({res['tool']})" if res["tool"] else ""
 
     return f"{status} {tool_info}:\n{res['log']}"
+
+
+async def _read_readme() -> str:
+    """
+    Finds and reads the project's README or GUIDELINES files.
+    """
+    possible_files = [
+        "README.md",
+        "README.txt",
+        "README",
+        "CONTRIBUTING.md",
+        "CONTRIBUTING.txt",
+        "GUIDELINES.md",
+        "docs/guidelines.md",
+    ]
+    outputs = []
+    for file in possible_files:
+        if os.path.exists(file):
+            content = await _read_file_cat(file)
+            if not content.startswith("Error:"):
+                outputs.append(f"--- File: {file} ---\n{content}")
+
+    if not outputs:
+        return "No README or guidelines files found in the root directory."
+
+    return "\n\n".join(outputs)
