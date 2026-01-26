@@ -63,8 +63,18 @@ export class ApiClient {
 
             this._callbacks.onMessage('system', '✅ Configuration updated successfully.');
             this._callbacks.onMessage('assistant', 'Configuration saved! Please restart the server for changes to take effect.');
+            
+            return {
+                success: true,
+                message: 'Configuration updated successfully'
+            };
         } catch (error: any) {
             this._callbacks.onMessage('system', `❌ Error mapping config: ${error.message}`);
+            
+            return {
+                success: false,
+                message: error.message
+            };
         }
     }
 

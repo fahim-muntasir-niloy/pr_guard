@@ -9,7 +9,7 @@ class ServerManager {
         this._onMessage = _onMessage;
         this._onReady = _onReady;
         this._isServerStarting = false;
-        this.apiBaseUrl = 'http://127.0.0.1:8000';
+        this.apiBaseUrl = 'http://127.0.0.1:8900';
     }
     async restartServer() {
         await this.stopServer();
