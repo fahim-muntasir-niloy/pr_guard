@@ -205,7 +205,7 @@
 
     const loadBranches = async () => {
         try {
-            const res = await fetch('http://127.0.0.1:8000/branches');
+            const res = await fetch('http://127.0.0.1:8900/branches');
             if (res.ok) {
                 const data = await res.json();
                 if (data.branches) {

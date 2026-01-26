@@ -52,7 +52,12 @@ class SidebarProvider {
                 }
                 case 'runCommand': {
                     this._currentContext = 'command';
-                    await this._runCommand(data.command, data.params);
+                    var result = await this._runCommand(data.command, data.params);
+                    webviewView.webview.postMessage({
+                        type: 'commandResponse',
+                        command: data.command,
+                        data: result
+                    });
                     break;
                 }
                 case 'clearOutput': {
@@ -103,8 +108,18 @@ class SidebarProvider {
             return;
         }
         if (subCommand === 'status') {
-            await this._apiClient.runStatus();
+            const config = await this._apiClient.runStatus();
+            if (config && this._view) {
+                this._view.webview.postMessage({
+                    type: 'updateSettings',
+                    config
+                });
+            }
             return;
+        }
+        if (subCommand === 'updateConfig') {
+            const result = await this._apiClient.updateConfig(params);
+            return result;
         }
         if (subCommand === 'getTree') {
             await this._apiClient.runTree(params);

@@ -4,7 +4,7 @@ import * as cp from 'child_process';
 export class ServerManager {
     private _serverProcess?: cp.ChildProcess;
     private _isServerStarting = false;
-    public readonly apiBaseUrl = 'http://127.0.0.1:8000';
+    public readonly apiBaseUrl = 'http://127.0.0.1:8900';
 
     constructor(
         private readonly _getCliCommand: () => Promise<string | null>,

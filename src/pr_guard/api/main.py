@@ -287,7 +287,7 @@ async def one_click_pr(request: ChatPullRequest):
 )
 async def list_branches():
     from pr_guard.utils.git_utils import _run_git_command
-
+    print("Listing branches")
     try:
         raw = _run_git_command(["branch", "-a"])
         branches = set()
